@@ -4,11 +4,16 @@ import { AIChat } from './AIChat';
 import { Settings } from './Settings';
 import { createRoutes } from '../router';
 import { Profile } from './Profile';
+import ConfigureActivities from './ConfigureActivities';
+import HistoryPage from './History';
+
 // Define routes
 export const routes = createRoutes({
   '/': Home,
   '/ai-chat': AIChat,
   '/settings': Settings,
-  '/not-found': NotFound,
   '/profile': Profile,
+  '/configure-activities': ConfigureActivities,
+  '/history': HistoryPage,
+  '/not-found': NotFound,
 });

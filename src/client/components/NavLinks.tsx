@@ -7,10 +7,20 @@ export const navItems: NavItem[] = [
   { path: '/', label: 'Home', icon: <HomeIcon /> },
   { path: '/ai-chat', label: 'AI Chat', icon: <ChatIcon /> },
   { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },
+  {
+    path: '/configure-activities',
+    label: 'Configure Activities',
+    icon: <SettingsIcon />,
+  },
 ];
 
 export const menuItems: NavItem[] = [
   { path: '/', label: 'Home', icon: <HomeIcon /> },
   { path: '/ai-chat', label: 'AI Chat', icon: <ChatIcon /> },
   { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },
+  {
+    path: '/configure-activities',
+    label: 'Configure Activities',
+    icon: <SettingsIcon />,
+  },
 ];

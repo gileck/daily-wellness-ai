@@ -1,0 +1,1 @@
+export { HistoryPage as default } from './HistoryPage'; // Export as default for lazy loading 

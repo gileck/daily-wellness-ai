@@ -1,5 +1,8 @@
 import { MongoClient, Db } from 'mongodb';
 import { appConfig } from '@/app.config';
+// Import our mongoose connection to ensure it's initialized
+import './mongoose';
+
 // --- Configuration ---
 // Read connection string and DB name from environment variables
 // Fallback to defaults for local development if needed
