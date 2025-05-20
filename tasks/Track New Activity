@@ -1,0 +1,8 @@
+Tasks for the Track New Activity in the home page
+1. Add a new field to the "ActivityTypes" schema (defined in db-schema.md) that indicates how frequesnt this activity should be tracked.
+For example: "Sleep" - should be tracked once a day. 
+Meal should be tracked few times a day. 
+Exercise can be tracked a few times day (but not every day).
+We will use this field to know when to prompt the user to track this activity.
+For example - for sleep, since its once a day, once a user tracked it, the app will no longer suggest it that day.
+But for meals, since it can be tracked few times a day, the app will keep suggesting it to the user, same for exercise.

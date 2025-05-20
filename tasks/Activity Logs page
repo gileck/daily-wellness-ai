@@ -1,0 +1,8 @@
+Tasks for the Activity log page:
+1. add the ability to edit / remove / duplicate tracked activities ✅
+
+
+** FUTURE TASKS (NOT FOR NOW) ** 
+2. add pagination to the activity log page
+3. add filter capabilities (by date range, activity type)
+4. add export functionality (CSV/PDF)

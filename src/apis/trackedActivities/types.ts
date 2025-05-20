@@ -29,4 +29,38 @@ export interface GetTrackedActivitiesParams {
 export interface GetTrackedActivitiesResponse {
     trackedActivities: TrackedActivity[];
     total: number;
+}
+
+// Update tracked activity interfaces
+export interface UpdateTrackedActivityPayload {
+    activityId: string;
+    updates: {
+        activityName?: string;
+        timestamp?: Date;
+        values?: TrackedActivityValue[];
+        notes?: string;
+    };
+}
+
+export interface UpdateTrackedActivityResponse {
+    trackedActivity: TrackedActivity;
+}
+
+// Delete tracked activity interfaces
+export interface DeleteTrackedActivityPayload {
+    activityId: string;
+}
+
+export interface DeleteTrackedActivityResponse {
+    success: boolean;
+}
+
+// Duplicate tracked activity interfaces
+export interface DuplicateTrackedActivityPayload {
+    activityId: string;
+    timestamp?: Date; // Optional new timestamp (defaults to current time)
+}
+
+export interface DuplicateTrackedActivityResponse {
+    trackedActivity: TrackedActivity;
 } 
