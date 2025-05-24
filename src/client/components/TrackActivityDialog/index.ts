@@ -1,1 +1,1 @@
-export { TrackActivityDialog } from './TrackActivityDialog'; 
+export { ActivityDialog, TrackActivityDialog } from './TrackActivityDialog'; 

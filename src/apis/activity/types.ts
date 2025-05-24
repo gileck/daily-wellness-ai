@@ -9,7 +9,7 @@ export type ActivityTypeField = ServerActivityTypeField; // Alias for local use
 
 // Define the enum for field types based on ActivityTypeField.fieldType
 // Assuming ServerActivityTypeField has fieldType, otherwise this needs adjustment
-export const ActivityFieldTypeValues = ['Boolean', 'Number', 'Time', 'Date', 'Text', 'String', 'Foods'] as const;
+export const ActivityFieldTypeValues = ['Boolean', 'Number', 'Time', 'Date', 'Text', 'String', 'Foods', 'Options'] as const;
 export type ActivityFieldTypeEnum = typeof ActivityFieldTypeValues[number];
 
 // Base interface for common fields

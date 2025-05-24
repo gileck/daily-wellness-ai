@@ -2,8 +2,9 @@ import { ObjectId } from 'mongodb';
 
 export interface ActivityTypeField {
     name: string;
-    fieldType: 'Boolean' | 'Number' | 'Time' | 'Date' | 'Text' | 'String' | 'Foods'; // 'String' as a synonym for 'Text'
+    fieldType: 'Boolean' | 'Number' | 'Time' | 'Date' | 'Text' | 'String' | 'Foods' | 'Options'; // 'String' as a synonym for 'Text'
     required?: boolean;
+    options?: string[]; // For Options field type
 }
 
 export interface ActivityType {

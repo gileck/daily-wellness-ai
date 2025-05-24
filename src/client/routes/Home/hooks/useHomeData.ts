@@ -51,7 +51,7 @@ export interface UseHomeDataResult extends HomeDataState {
     openTrackingDialog: (activityType: ActivityTypeClient) => void;
     openTrackingDialogWithPreset: (preset: ActivityPresetClient, activityType: ActivityTypeClient) => void;
     closeTrackingDialog: () => void;
-    handleTrackActivity: (activityType: ActivityTypeClient, values: TrackedActivityValue[], notes?: string) => Promise<void>;
+    handleTrackActivity: (activityType: ActivityTypeClient, values: TrackedActivityValue[], notes?: string, timestamp?: Date) => Promise<void>;
     handleTrackPreset: (preset: ActivityPresetClient) => Promise<void>;
     clearSuccessMessage: () => void;
 }
@@ -195,15 +195,16 @@ export const useHomeData = (): UseHomeDataResult => {
     const handleTrackActivity = useCallback(async (
         activityType: ActivityTypeClient,
         values: TrackedActivityValue[],
-        notes?: string
+        notes?: string,
+        timestamp?: Date
     ) => {
         updateState({ isSubmitting: true, error: null });
         try {
-            const timestamp = new Date();
+            const activityTimestamp = timestamp || new Date();
             const payload: CreateTrackedActivityPayload = {
                 activityTypeId: activityType._id,
                 activityName: activityType.name,
-                timestamp,
+                timestamp: activityTimestamp,
                 values,
                 notes,
             };
@@ -212,7 +213,7 @@ export const useHomeData = (): UseHomeDataResult => {
             // Update the last logged time for this activity
             const updatedLastLoggedTimes = {
                 ...state.lastLoggedTimes,
-                [activityType._id]: timestamp
+                [activityType._id]: activityTimestamp
             };
 
             // Filter out the tracked activity from the list

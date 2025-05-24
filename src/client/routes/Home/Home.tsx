@@ -9,7 +9,7 @@ import {
   Snackbar
 } from '@mui/material';
 import { useHomeData } from './hooks/useHomeData';
-import { TrackActivityDialog } from '@/client/components/TrackActivityDialog/TrackActivityDialog';
+import { TrackActivityDialog } from '@/client/components/TrackActivityDialog';
 import { ActivityTypesGrid, QuickPresetsSection, RecentActivitiesSection } from './components';
 import { colors } from './utils/colorUtils';
 

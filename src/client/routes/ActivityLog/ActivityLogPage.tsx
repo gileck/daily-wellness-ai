@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Typography, Box, CircularProgress, Alert, List, ListItem, ListItemText, Divider, Button, Card, CardContent, Snackbar, Checkbox, ListItemIcon, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Chip, Avatar } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -8,8 +8,10 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import { useActivityLogData } from './hooks/useActivityLogData';
 import { format, isAfter, isBefore, startOfDay, endOfDay } from 'date-fns';
 import { TrackedActivity, TrackedActivityValue, UpdateTrackedActivityPayload } from '@/apis/trackedActivities/types';
+import { ActivityTypeClient } from '@/apis/activity/types';
+import { getActivityTypes } from '@/apis/activity/client';
 import { ActivityActions } from './components/ActivityActions';
-import { ActivityEditDialog } from './components/ActivityEditDialog';
+import { ActivityDialog } from '@/client/components/TrackActivityDialog';
 import { ActivityFilterDialog } from './components/ActivityFilterDialog';
 import { getActivityIcon } from '@/client/utils/activityIcons';
 import { formatFieldValue } from '@/client/utils/foodDisplayUtils';
@@ -47,6 +49,7 @@ export const ActivityLogPage = () => {
     const [deleteAction, setDeleteAction] = useState<(() => Promise<void>) | null>(null);
     const [deleteMessage, setDeleteMessage] = useState<string>('');
     const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+    const [activityTypes, setActivityTypes] = useState<ActivityTypeClient[]>([]);
     const [filters, setFilters] = useState<{
         selectedActivityNames: string[];
         dateFrom: Date | null;
@@ -66,6 +69,19 @@ export const ActivityLogPage = () => {
         removeActivity,
         duplicateActivity
     } = useActivityLogData();
+
+    // Fetch activity types
+    useEffect(() => {
+        const fetchActivityTypesData = async () => {
+            try {
+                const response = await getActivityTypes();
+                setActivityTypes(response.data.activityTypes);
+            } catch (error) {
+                console.error('Failed to fetch activity types:', error);
+            }
+        };
+        fetchActivityTypesData();
+    }, []);
 
     const uniqueActivityNames = useMemo(() => {
         return Array.from(new Set(trackedActivities.map(activity => activity.activityName))).sort();
@@ -225,6 +241,11 @@ export const ActivityLogPage = () => {
     };
 
     const hasActiveFilters = filters.selectedActivityNames.length > 0 || filters.dateFrom || filters.dateTo;
+
+    // Find the activity type for the selected activity
+    const selectedActivityType = selectedActivity && activityTypes.find(
+        type => type.name === selectedActivity.activityName
+    );
 
     if (isLoading && trackedActivities.length === 0) {
         return (
@@ -531,12 +552,16 @@ export const ActivityLogPage = () => {
                 </CardContent>
             </Card>
 
-            <ActivityEditDialog
-                open={isEditDialogOpen}
-                activity={selectedActivity}
-                onClose={handleEditClose}
-                onSave={handleUpdateActivity}
-            />
+            {selectedActivityType && (
+                <ActivityDialog
+                    open={isEditDialogOpen}
+                    activityType={selectedActivityType}
+                    existingActivity={selectedActivity}
+                    onClose={handleEditClose}
+                    onEdit={handleUpdateActivity}
+                    isSubmitting={false}
+                />
+            )}
 
             <ActivityFilterDialog
                 open={isFilterDialogOpen}

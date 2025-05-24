@@ -18,11 +18,15 @@ import {
     List,
     ListItem,
     ListItemText,
-    Divider
+    Divider,
+    Select,
+    MenuItem,
+    FormControl,
+    InputLabel
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { ActivityTypeClient, ActivityTypeField } from '@/apis/activity/types';
-import { TrackedActivityValue } from '@/apis/trackedActivities/types';
+import { TrackedActivityValue, TrackedActivity, UpdateTrackedActivityPayload } from '@/apis/trackedActivities/types';
 import { getActivityIconWithProps } from '@/client/utils/activityIcons';
 import { FoodSelectionDialog } from '@/client/components/FoodSelectionDialog';
 import { FoodClient } from '@/apis/foods/types';
@@ -32,14 +36,19 @@ import { FoodPortion } from '@/client/components/FoodSelectionDialog/types';
 
 type FormValue = string | number | boolean | Date | null | string[] | FoodPortion[];
 
-interface TrackActivityDialogProps {
+interface ActivityDialogProps {
     open: boolean;
-    activityType: ActivityTypeClient | null;
+    // Common props - activityType is always required
+    activityType: ActivityTypeClient;
     onClose: () => void;
-    onTrack: (activityType: ActivityTypeClient, values: TrackedActivityValue[], notes?: string) => Promise<void>;
     isSubmitting: boolean;
     error?: string | null;
     initialValues?: Record<string, unknown>;
+    // For new activities
+    onTrack?: (activityType: ActivityTypeClient, values: TrackedActivityValue[], notes?: string, timestamp?: Date) => Promise<void>;
+    // For editing activities
+    existingActivity?: TrackedActivity | null;
+    onEdit?: (activityId: string, updates: UpdateTrackedActivityPayload['updates']) => Promise<boolean>;
 }
 
 interface FormState {
@@ -57,16 +66,43 @@ const Transition = React.forwardRef(function Transition(
     }} />;
 });
 
-export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, activityType, onClose, onTrack, isSubmitting, error, initialValues }) => {
+export const ActivityDialog: React.FC<ActivityDialogProps> = ({
+    open,
+    activityType,
+    existingActivity,
+    onClose,
+    onTrack,
+    onEdit,
+    isSubmitting,
+    error,
+    initialValues
+}) => {
     const [formState, setFormState] = useState<FormState>({});
     const [notes, setNotes] = useState<string>('');
+    const [timestamp, setTimestamp] = useState<Date>(new Date());
     const [localError, setLocalError] = useState<string | null>(null);
     const [foodDialogOpen, setFoodDialogOpen] = useState(false);
     const [currentFoodField, setCurrentFoodField] = useState<string | null>(null);
     const [foodsCache, setFoodsCache] = useState<Map<string, FoodClient>>(new Map());
 
+    const isEditMode = !!existingActivity;
+
     useEffect(() => {
-        if (activityType) {
+        if (isEditMode && existingActivity) {
+            // Initialize form for editing existing activity
+            const initialFormState: FormState = {};
+
+            // Use existing activity values to populate form
+            existingActivity.values.forEach(value => {
+                initialFormState[value.fieldName] = value.value as FormValue;
+            });
+
+            setFormState(initialFormState);
+            setNotes(existingActivity.notes || '');
+            setTimestamp(new Date(existingActivity.timestamp));
+            setLocalError(null);
+        } else if (activityType) {
+            // Initialize form for new activity
             const initialFormState: FormState = {};
             activityType.fields.forEach(field => {
                 if (initialValues && field.name in initialValues) {
@@ -98,14 +134,16 @@ export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, 
                 }
             });
             setFormState(initialFormState);
-            setNotes(''); // Reset notes when activity type changes
+            setNotes('');
+            setTimestamp(new Date());
             setLocalError(null);
         } else {
             setFormState({});
             setNotes('');
+            setTimestamp(new Date());
             setLocalError(null);
         }
-    }, [activityType, initialValues]);
+    }, [activityType, initialValues, isEditMode, existingActivity]);
 
     const fetchFoodsForDisplay = useCallback(async (foodIds: string[]) => {
         const uncachedIds = foodIds.filter(id => !foodsCache.has(id));
@@ -211,21 +249,47 @@ export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, 
         return true;
     }, [activityType, formState]);
 
+    // Re-validate whenever form state changes to clear errors when fields become valid
+    useEffect(() => {
+        if (activityType && Object.keys(formState).length > 0) {
+            validateFields();
+        }
+    }, [formState, validateFields, activityType]);
 
     const handleSubmit = async () => {
         if (!activityType || !validateFields()) return;
 
-        const values: TrackedActivityValue[] = activityType.fields.map(field => ({
-            fieldName: field.name,
-            value: formState[field.name],
-        }));
+        if (isEditMode && existingActivity && onEdit) {
+            // Edit mode
+            const values: TrackedActivityValue[] = activityType.fields.map(field => ({
+                fieldName: field.name,
+                value: formState[field.name],
+            }));
 
-        try {
-            await onTrack(activityType, values, notes || undefined); // Pass undefined if notes is empty
-            // onClose(); // Let the hook handle closing on success
-        } catch (e) {
-            // Error is handled by the hook and displayed via props
-            console.error("Submission error in dialog, but should be caught by hook", e);
+            try {
+                const success = await onEdit(existingActivity._id, {
+                    timestamp,
+                    notes: notes || undefined,
+                    values
+                });
+                if (success) {
+                    onClose();
+                }
+            } catch (e) {
+                console.error("Submission error in edit dialog, but should be caught by hook", e);
+            }
+        } else if (!isEditMode && onTrack) {
+            // Track mode
+            const values: TrackedActivityValue[] = activityType.fields.map(field => ({
+                fieldName: field.name,
+                value: formState[field.name],
+            }));
+
+            try {
+                await onTrack(activityType, values, notes || undefined, timestamp);
+            } catch (e) {
+                console.error("Submission error in track dialog, but should be caught by hook", e);
+            }
         }
     };
 
@@ -344,6 +408,38 @@ export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, 
                         </Button>
                     </Box>
                 );
+            case 'Options':
+                return (
+                    <FormControl key={field.name} fullWidth margin="dense" error={!!localError && localError.includes(field.name)}>
+                        <InputLabel id={`${field.name}-label`}>
+                            {field.name + (field.required ? ' *' : '')}
+                        </InputLabel>
+                        <Select
+                            labelId={`${field.name}-label`}
+                            value={formState[field.name] || ''}
+                            label={field.name + (field.required ? ' *' : '')}
+                            onChange={(e) => handleChange(field.name, e.target.value, field.fieldType)}
+                            sx={{
+                                borderRadius: '8px',
+                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: activityType?.color || '#007AFF',
+                                    borderWidth: '2px'
+                                }
+                            }}
+                        >
+                            {!field.required && (
+                                <MenuItem value="">
+                                    <em>None</em>
+                                </MenuItem>
+                            )}
+                            {field.options?.map((option, index) => (
+                                <MenuItem key={index} value={option}>
+                                    {option}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                );
             case 'Text':
             case 'String':
             default:
@@ -401,7 +497,7 @@ export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, 
                                     mb: 0.5
                                 }}
                             >
-                                Track Activity
+                                {isEditMode ? 'Edit Activity' : 'Track Activity'}
                             </Typography>
                             <Typography
                                 variant="body2"
@@ -430,6 +526,26 @@ export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, 
                 </DialogTitle>
                 <DialogContent sx={{ p: 3 }}>
                     <Grid container spacing={2.5} sx={{ mt: 2 }}>
+                        <Grid size={12}>
+                            <TextField
+                                label="Activity Date & Time"
+                                type="datetime-local"
+                                fullWidth
+                                margin="dense"
+                                value={timestamp.toISOString().slice(0, 16)}
+                                onChange={(e) => setTimestamp(new Date(e.target.value))}
+                                InputLabelProps={{ shrink: true }}
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        borderRadius: '8px',
+                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: activityType?.color || '#007AFF',
+                                            borderWidth: '2px'
+                                        }
+                                    }
+                                }}
+                            />
+                        </Grid>
                         {activityType.fields.map(field => (
                             <Grid size={12} key={field.name}>
                                 {renderField(field)}
@@ -523,7 +639,7 @@ export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, 
                             }
                         }}
                     >
-                        {isSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Add'}
+                        {isSubmitting ? <CircularProgress size={20} color="inherit" /> : (isEditMode ? 'Save Changes' : 'Add')}
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -537,6 +653,9 @@ export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, 
         </>
     );
 };
+
+// Keep backward compatibility
+export const TrackActivityDialog = ActivityDialog;
 
 // Create an index.ts file for the component
 // export { TrackActivityDialog } from './TrackActivityDialog'; 

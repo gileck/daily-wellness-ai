@@ -196,14 +196,58 @@ export const AddActivityTypeDialog: React.FC<AddActivityTypeDialogProps> = ({ op
         setFields(newFields);
     };
 
-    const handleFieldChange = (index: number, propertyName: keyof ActivityTypeField, value: string | boolean) => {
+    const handleFieldChange = (index: number, propertyName: keyof ActivityTypeField, value: string | boolean | string[]) => {
         const newFields = fields.map((field, i) => {
             if (i === index) {
-                return { ...field, [propertyName]: value };
+                const updatedField = { ...field, [propertyName]: value };
+                // If changing field type to non-Options, clear the options
+                if (propertyName === 'fieldType' && value !== 'Options') {
+                    delete updatedField.options;
+                }
+                // If changing to Options, initialize with empty options array
+                if (propertyName === 'fieldType' && value === 'Options') {
+                    updatedField.options = [];
+                }
+                return updatedField;
             }
             return field;
         });
         setFields(newFields);
+    };
+
+    const handleOptionsChange = (fieldIndex: number, newOptions: string[]) => {
+        const newFields = fields.map((field, i) => {
+            if (i === fieldIndex) {
+                return { ...field, options: newOptions };
+            }
+            return field;
+        });
+        setFields(newFields);
+    };
+
+    const addOption = (fieldIndex: number) => {
+        const field = fields[fieldIndex];
+        if (field && field.fieldType === 'Options') {
+            const newOptions = [...(field.options || []), ''];
+            handleOptionsChange(fieldIndex, newOptions);
+        }
+    };
+
+    const removeOption = (fieldIndex: number, optionIndex: number) => {
+        const field = fields[fieldIndex];
+        if (field && field.fieldType === 'Options' && field.options) {
+            const newOptions = field.options.filter((_, i) => i !== optionIndex);
+            handleOptionsChange(fieldIndex, newOptions);
+        }
+    };
+
+    const updateOption = (fieldIndex: number, optionIndex: number, value: string) => {
+        const field = fields[fieldIndex];
+        if (field && field.fieldType === 'Options' && field.options) {
+            const newOptions = [...field.options];
+            newOptions[optionIndex] = value;
+            handleOptionsChange(fieldIndex, newOptions);
+        }
     };
 
     const handleSubmit = async () => {
@@ -442,6 +486,50 @@ export const AddActivityTypeDialog: React.FC<AddActivityTypeDialogProps> = ({ op
                                 label="Required field"
                                 sx={{ mt: 0.5 }}
                             />
+
+                            {/* Options section for Options field type */}
+                            {field.fieldType === 'Options' && (
+                                <Box sx={{ mt: 2 }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>Options</Typography>
+                                        <Button
+                                            onClick={() => addOption(index)}
+                                            size="small"
+                                            variant="outlined"
+                                            sx={{ textTransform: 'none', fontSize: '12px' }}
+                                        >
+                                            Add Option
+                                        </Button>
+                                    </Box>
+
+                                    {field.options && field.options.length > 0 ? (
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                            {field.options.map((option, optionIndex) => (
+                                                <Box key={optionIndex} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <TextField
+                                                        size="small"
+                                                        placeholder={`Option ${optionIndex + 1}`}
+                                                        value={option}
+                                                        onChange={(e) => updateOption(index, optionIndex, e.target.value)}
+                                                        fullWidth
+                                                    />
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => removeOption(index, optionIndex)}
+                                                        sx={{ color: 'error.main' }}
+                                                    >
+                                                        <CloseIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Box>
+                                            ))}
+                                        </Box>
+                                    ) : (
+                                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', textAlign: 'center', py: 2 }}>
+                                            No options added. Click &ldquo;Add Option&rdquo; to start.
+                                        </Typography>
+                                    )}
+                                </Box>
+                            )}
                         </Paper>
                     ))
                 )}
