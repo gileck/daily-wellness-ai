@@ -46,7 +46,7 @@ Daily Wellness AI helps users track their daily habits, wellness metrics (like s
 
 * Add/edit/delete field definitions per type (e.g., sleep: quality, duration; workout: duration, type, effort).
 
-* When defining a new activity type, users specify the fields to track (e.g., “Sleep” with “Duration” and “Quality”).
+* When defining a new activity type, users specify the fields to track (e.g., "Sleep" with "Duration" and "Quality").
 
 * Each field must include a **field type**, such as Boolean, Number, Time, Date, Text, etc.
 
@@ -62,13 +62,34 @@ Daily Wellness AI helps users track their daily habits, wellness metrics (like s
 * This gives full flexibility while keeping the experience beginner-friendly by offering a curated list to start from.  
 * 
 
-### **4\. Activity Log Page**
+### **4\. Activity Presets**
+
+* Create presets for activities with pre-filled field values for quick tracking.
+
+* **Preset Management in Configuration Dashboard:**
+  * Add new presets for any configured activity type
+  * Define custom preset names (e.g., "Good Night Sleep", "Morning Coffee")
+  * Set default values for all activity fields
+  * Edit or delete existing presets
+
+* **Quick Tracking from Home Screen:**
+  * View presets as dedicated cards/buttons
+  * One-tap tracking using preset values
+  * "Edit & Track" option to modify field values before saving
+  * Show preset usage for popular presets
+
+* **Example Use Cases:**
+  * Sleep preset: "22:30 bedtime, 8 hours, good quality"
+  * Meal preset: "Breakfast, 400 calories, at home"
+  * Workout preset: "30min cardio, medium intensity"
+
+### **5\. Activity Log Page**
 
 * View, edit, delete, or duplicate past tracked activities and metrics.
 
 * Filter and sort entries by time, type, tags, or keyword.
 
-### **5\. AI-Powered Home Page**
+### **6\. AI-Powered Home Page**
 
 * Displays:
 
@@ -78,39 +99,75 @@ Daily Wellness AI helps users track their daily habits, wellness metrics (like s
 
     * **Add Metric** – with suggested wellness metrics based on previous entries and trends
 
-  * Intelligent reminders (e.g., “You usually log lunch around now. Want to log it?”)
+  * **Activity Presets** – quick access to user-defined presets for one-tap tracking
 
-  * Smart logging shortcuts (e.g., “Log same breakfast as yesterday”)
+  * Intelligent reminders (e.g., "You usually log lunch around now. Want to log it?")
 
-  * Quick entry for today’s metrics (energy, mood, etc.)
+  * Smart logging shortcuts (e.g., "Log same breakfast as yesterday")
+
+  * Quick entry for today's metrics (energy, mood, etc.)
 
   * Suggested activities based on time of day and user patterns
 
-### **6\. AI Chat Interface**
+### **7\. AI Chat Interface**
 
 * Conversational interface to explore personal data.
 
 * Example prompts:
 
-  * “How does my sleep affect next-day energy?”
+  * "How does my sleep affect next-day energy?"
 
-  * “Have I been more stressed this week than last?”
+  * "Have I been more stressed this week than last?"
 
-* Data summaries generated using AI with access to user’s tracking history.
+* Data summaries generated using AI with access to user's tracking history.
 
-### **7\. Correlations & Insights Page**
+### **8\. Correlations & Insights Page**
 
 * Dedicated area for viewing AI-discovered patterns and trends.
 
 * Example insights:
 
-  * “Meditation reduces stress by 30% on average.”
+  * "Meditation reduces stress by 30% on average."
 
-  * “Poor sleep is linked to low mood 3 days a week.”
+  * "Poor sleep is linked to low mood 3 days a week."
 
 * Simple visualizations (bar/line charts, heatmaps).
 
 * Option to explore specific time ranges or activity types.
+
+---
+
+## **Future Enhancements & Known Issues**
+
+### **Activity Presets - Potential Issues & Solutions**
+
+**Field Validation Conflicts:**
+* Issue: ActivityType fields change after preset creation
+* Solution: Validate presets against current schema, show warnings for mismatches
+
+**Data Consistency:**
+* Issue: ActivityType deleted but presets reference it  
+* Solution: Cascade delete or mark presets as inactive
+
+**UI Complexity:**
+* Issue: Too many presets cluttering Home screen
+* Solution: Show top 6 most-used presets, "Show All" option
+
+**Performance:**
+* Issue: Loading all presets on Home screen
+* Solution: Lazy load, cache frequently used presets
+
+**User Experience:**
+* Issue: Preset naming complexity
+* Solution: Auto-generate names from key field values, allow custom names
+
+### **Planned Future Features**
+
+**Smart Preset Features:**
+* Auto-generate preset names from key fields: "Sleep: 22:30, 8hrs, Good"
+* Usage analytics and favorites
+* Time-based preset suggestions
+* Preset templates/sharing
 
 ---
 

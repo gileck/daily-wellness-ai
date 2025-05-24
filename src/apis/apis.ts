@@ -6,6 +6,8 @@ import { activityApiHandlers } from "./activity/server";
 import { predefinedDataApiHandlers } from "./predefinedData/server";
 import { wellnessMetricsApiHandlers } from "./wellnessMetrics/server";
 import { trackedActivitiesApiHandlers } from "./trackedActivities/server";
+import { activityPresetsApiHandlers } from "./activityPresets/server";
+import { foodsApiHandlers } from "./foods/server";
 
 // Cast each handler in activityApiHandlers to the generic signature
 const typedActivityApiHandlers = Object.entries(activityApiHandlers).reduce(
@@ -51,6 +53,28 @@ const typedTrackedActivitiesApiHandlers = Object.entries(trackedActivitiesApiHan
   {} as ApiHandlers
 );
 
+// Cast activityPresetsApiHandlers similarly
+const typedActivityPresetsApiHandlers = Object.entries(activityPresetsApiHandlers).reduce(
+  (acc, [key, handler]) => {
+    acc[key] = {
+      process: handler.process as (params: unknown, context: ApiHandlerContext) => Promise<unknown>,
+    };
+    return acc;
+  },
+  {} as ApiHandlers
+);
+
+// Cast foodsApiHandlers similarly
+const typedFoodsApiHandlers = Object.entries(foodsApiHandlers).reduce(
+  (acc, [key, handler]) => {
+    acc[key] = {
+      process: handler.process as (params: unknown, context: ApiHandlerContext) => Promise<unknown>,
+    };
+    return acc;
+  },
+  {} as ApiHandlers
+);
+
 export const apiHandlers: ApiHandlers = {
   [chat.name]: { process: chat.process as (params: unknown, context: ApiHandlerContext) => Promise<unknown> },
   [clearCache.name]: { process: clearCache.process as (params: unknown, context: ApiHandlerContext) => Promise<unknown> },
@@ -63,6 +87,8 @@ export const apiHandlers: ApiHandlers = {
   ...typedPredefinedDataApiHandlers, // Spread new typed handlers
   ...typedWellnessMetricsApiHandlers, // Spread new typed handlers
   ...typedTrackedActivitiesApiHandlers, // Add new TYPED tracked activities handlers
+  ...typedActivityPresetsApiHandlers, // Spread activity presets handlers
+  ...typedFoodsApiHandlers, // Spread foods handlers
 };
 
 

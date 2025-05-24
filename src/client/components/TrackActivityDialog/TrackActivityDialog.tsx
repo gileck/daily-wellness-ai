@@ -10,12 +10,27 @@ import {
     Grid,
     FormControlLabel,
     Checkbox,
-    Typography
+    Typography,
+    Box,
+    Avatar,
+    Slide,
+    IconButton,
+    List,
+    ListItem,
+    ListItemText,
+    Divider
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { ActivityTypeClient, ActivityTypeField } from '@/apis/activity/types';
 import { TrackedActivityValue } from '@/apis/trackedActivities/types';
+import { getActivityIconWithProps } from '@/client/utils/activityIcons';
+import { FoodSelectionDialog } from '@/client/components/FoodSelectionDialog';
+import { FoodClient } from '@/apis/foods/types';
+import { getFood } from '@/apis/foods/client';
+import { formatFoodWithEmoji } from '@/client/utils/foodEmojiUtils';
+import { FoodPortion } from '@/client/components/FoodSelectionDialog/types';
 
-type FormValue = string | number | boolean | Date | null;
+type FormValue = string | number | boolean | Date | null | string[] | FoodPortion[];
 
 interface TrackActivityDialogProps {
     open: boolean;
@@ -24,22 +39,63 @@ interface TrackActivityDialogProps {
     onTrack: (activityType: ActivityTypeClient, values: TrackedActivityValue[], notes?: string) => Promise<void>;
     isSubmitting: boolean;
     error?: string | null;
+    initialValues?: Record<string, unknown>;
 }
 
 interface FormState {
     [fieldName: string]: FormValue;
 }
 
-export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, activityType, onClose, onTrack, isSubmitting, error }) => {
+// Transition component for smooth animations
+const Transition = React.forwardRef(function Transition(
+    props: React.ComponentProps<typeof Slide>,
+    ref: React.Ref<unknown>,
+) {
+    return <Slide direction="up" ref={ref} {...props} timeout={{
+        enter: 300,
+        exit: 200
+    }} />;
+});
+
+export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, activityType, onClose, onTrack, isSubmitting, error, initialValues }) => {
     const [formState, setFormState] = useState<FormState>({});
     const [notes, setNotes] = useState<string>('');
     const [localError, setLocalError] = useState<string | null>(null);
+    const [foodDialogOpen, setFoodDialogOpen] = useState(false);
+    const [currentFoodField, setCurrentFoodField] = useState<string | null>(null);
+    const [foodsCache, setFoodsCache] = useState<Map<string, FoodClient>>(new Map());
 
     useEffect(() => {
         if (activityType) {
             const initialFormState: FormState = {};
             activityType.fields.forEach(field => {
-                initialFormState[field.name] = field.fieldType === 'Boolean' ? false : '';
+                if (initialValues && field.name in initialValues) {
+                    let fieldValue = initialValues[field.name] as FormValue;
+
+                    // Convert string[] food IDs to FoodPortion[] format for Foods fields
+                    if (field.fieldType === 'Foods' && Array.isArray(fieldValue)) {
+                        if (fieldValue.length > 0 && typeof fieldValue[0] === 'string') {
+                            // Convert from string[] to FoodPortion[]
+                            fieldValue = (fieldValue as string[]).map(foodId => ({
+                                foodId,
+                                amount: 1,
+                                servingType: 'grams' as const,
+                                servingName: '',
+                                gramsEquivalent: 1
+                            }));
+                        }
+                    }
+
+                    initialFormState[field.name] = fieldValue;
+                } else {
+                    if (field.fieldType === 'Boolean') {
+                        initialFormState[field.name] = false;
+                    } else if (field.fieldType === 'Foods') {
+                        initialFormState[field.name] = [];
+                    } else {
+                        initialFormState[field.name] = '';
+                    }
+                }
             });
             setFormState(initialFormState);
             setNotes(''); // Reset notes when activity type changes
@@ -49,7 +105,53 @@ export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, 
             setNotes('');
             setLocalError(null);
         }
-    }, [activityType]);
+    }, [activityType, initialValues]);
+
+    const fetchFoodsForDisplay = useCallback(async (foodIds: string[]) => {
+        const uncachedIds = foodIds.filter(id => !foodsCache.has(id));
+        if (uncachedIds.length === 0) return;
+
+        try {
+            const foodPromises = uncachedIds.map(id => getFood({ id }));
+            const results = await Promise.all(foodPromises);
+
+            const newCache = new Map(foodsCache);
+            results.forEach((result: Awaited<ReturnType<typeof getFood>>) => {
+                if (result.data.food) {
+                    newCache.set(result.data.food.id, result.data.food);
+                }
+            });
+            setFoodsCache(newCache);
+        } catch (error) {
+            console.error('Error fetching foods for display:', error);
+        }
+    }, [foodsCache]);
+
+    // Fetch foods when food fields change
+    useEffect(() => {
+        if (!activityType) return;
+
+        const foodFields = activityType.fields.filter(field => field.fieldType === 'Foods');
+        const allFoodIds: string[] = [];
+
+        foodFields.forEach(field => {
+            const fieldValue = formState[field.name];
+            if (Array.isArray(fieldValue)) {
+                // Check if it's FoodPortion[] or string[]
+                if (fieldValue.length > 0 && typeof fieldValue[0] === 'object' && 'foodId' in fieldValue[0]) {
+                    // It's FoodPortion[]
+                    allFoodIds.push(...(fieldValue as FoodPortion[]).map(portion => portion.foodId));
+                } else {
+                    // It's string[] (legacy)
+                    allFoodIds.push(...(fieldValue as string[]));
+                }
+            }
+        });
+
+        if (allFoodIds.length > 0) {
+            fetchFoodsForDisplay(allFoodIds);
+        }
+    }, [formState, activityType, fetchFoodsForDisplay]);
 
     const handleChange = (fieldName: string, value: FormValue, fieldType: ActivityTypeField['fieldType']) => {
         let processedValue: FormValue = value;
@@ -63,6 +165,24 @@ export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, 
         setNotes(event.target.value);
     };
 
+    const handleFoodSelection = (fieldName: string) => {
+        setCurrentFoodField(fieldName);
+        setFoodDialogOpen(true);
+    };
+
+    const handleFoodSave = (selectedFoodPortions: FoodPortion[]) => {
+        if (currentFoodField) {
+            setFormState(prev => ({ ...prev, [currentFoodField]: selectedFoodPortions }));
+        }
+        setFoodDialogOpen(false);
+        setCurrentFoodField(null);
+    };
+
+    const handleFoodDialogClose = () => {
+        setFoodDialogOpen(false);
+        setCurrentFoodField(null);
+    };
+
     const validateFields = useCallback(() => {
         if (!activityType) return false;
         for (const field of activityType.fields) {
@@ -72,8 +192,14 @@ export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, 
                     if (field.fieldType === 'Boolean' && typeof value === 'boolean' && value === false) {
                         continue;
                     }
-                    setLocalError(`Field '${field.name}' is required.`);
-                    return false;
+                    if (field.fieldType === 'Foods' && Array.isArray(value) && value.length === 0) {
+                        setLocalError(`Field '${field.name}' is required.`);
+                        return false;
+                    }
+                    if (field.fieldType !== 'Foods') {
+                        setLocalError(`Field '${field.name}' is required.`);
+                        return false;
+                    }
                 }
             }
             if (field.fieldType === 'Number' && formState[field.name] !== '' && typeof formState[field.name] === 'number' && isNaN(formState[field.name] as number)) {
@@ -113,22 +239,44 @@ export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, 
             margin: 'dense' as const,
             value: formState[field.name] || (field.fieldType === 'Boolean' ? false : ''),
             onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => handleChange(field.name, e.target.value, field.fieldType),
-            error: !!localError && localError.includes(field.name), // Basic error highlighting
+            error: !!localError && localError.includes(field.name),
+            sx: {
+                '& .MuiOutlinedInput-root': {
+                    borderRadius: '8px',
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: activityType?.color || '#007AFF',
+                        borderWidth: '2px'
+                    }
+                }
+            }
         };
 
         switch (field.fieldType) {
             case 'Boolean':
                 return (
-                    <FormControlLabel
-                        control={
-                            <Checkbox
-                                checked={Boolean(formState[field.name])}
-                                onChange={(e) => handleChange(field.name, e.target.checked, field.fieldType)}
-                            />
-                        }
-                        label={field.name + (field.required ? ' *' : '')}
-                        key={field.name}
-                    />
+                    <Box key={field.name} sx={{ display: 'flex', alignItems: 'center', py: 1 }}>
+                        <FormControlLabel
+                            control={
+                                <Checkbox
+                                    checked={Boolean(formState[field.name])}
+                                    onChange={(e) => handleChange(field.name, e.target.checked, field.fieldType)}
+                                    sx={{
+                                        color: activityType?.color || '#007AFF',
+                                        '&.Mui-checked': {
+                                            color: activityType?.color || '#007AFF',
+                                        }
+                                    }}
+                                />
+                            }
+                            label={field.name + (field.required ? ' *' : '')}
+                            sx={{
+                                '& .MuiFormControlLabel-label': {
+                                    fontSize: '17px',
+                                    fontWeight: 400
+                                }
+                            }}
+                        />
+                    </Box>
                 );
             case 'Number':
                 return <TextField {...commonProps} type="number" value={formState[field.name] === '' ? '' : String(formState[field.name])} />;
@@ -136,6 +284,66 @@ export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, 
                 return <TextField {...commonProps} type="time" InputLabelProps={{ shrink: true }} />;
             case 'Date':
                 return <TextField {...commonProps} type="date" InputLabelProps={{ shrink: true }} />;
+            case 'Foods':
+                const selectedFoodPortions = (formState[field.name] as FoodPortion[]) || [];
+                return (
+                    <Box key={field.name}>
+                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                            {field.name + (field.required ? ' *' : '')}
+                        </Typography>
+
+                        {selectedFoodPortions.length > 0 && (
+                            <Box sx={{
+                                border: '1px solid #E0E0E0',
+                                borderRadius: '8px',
+                                mb: 1,
+                                maxHeight: '200px',
+                                overflow: 'auto'
+                            }}>
+                                <List sx={{ py: 0 }}>
+                                    {selectedFoodPortions.map((portion, index) => {
+                                        const food = foodsCache.get(portion.foodId);
+                                        return (
+                                            <React.Fragment key={`${portion.foodId}-${index}`}>
+                                                <ListItem sx={{ py: 1, px: 2 }}>
+                                                    <ListItemText
+                                                        primary={food?.displayName ? formatFoodWithEmoji(food.displayName) : `Food ID: ${portion.foodId}`}
+                                                        secondary={
+                                                            <Typography variant="caption" color="text.secondary">
+                                                                {portion.amount} {portion.servingType === 'grams' ? 'g' : portion.servingName}
+                                                                ({portion.gramsEquivalent?.toFixed(1) || 0}g)
+                                                            </Typography>
+                                                        }
+                                                        primaryTypographyProps={{
+                                                            sx: { fontSize: '14px' }
+                                                        }}
+                                                    />
+                                                </ListItem>
+                                                {index < selectedFoodPortions.length - 1 && <Divider />}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </List>
+                            </Box>
+                        )}
+
+                        <Button
+                            variant="outlined"
+                            onClick={() => handleFoodSelection(field.name)}
+                            sx={{
+                                textTransform: 'none',
+                                borderColor: activityType?.color || '#007AFF',
+                                color: activityType?.color || '#007AFF',
+                                '&:hover': {
+                                    borderColor: activityType?.color || '#007AFF',
+                                    backgroundColor: `${activityType?.color || '#007AFF'}10`
+                                }
+                            }}
+                        >
+                            {selectedFoodPortions.length > 0 ? 'Add More Foods' : 'Select Foods'}
+                        </Button>
+                    </Box>
+                );
             case 'Text':
             case 'String':
             default:
@@ -144,38 +352,189 @@ export const TrackActivityDialog: React.FC<TrackActivityDialogProps> = ({ open, 
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>Track: {activityType.name}</DialogTitle>
-            <DialogContent>
-                <Grid container spacing={2} sx={{ mt: 1 }}>
-                    {activityType.fields.map(field => (
-                        <Grid size={12} key={field.name}>
-                            {renderField(field)}
+        <>
+            <Dialog
+                open={open}
+                onClose={onClose}
+                maxWidth="sm"
+                fullWidth
+                TransitionComponent={Transition}
+                PaperProps={{
+                    sx: {
+                        borderRadius: '12px',
+                        boxShadow: '0px 8px 32px rgba(0, 0, 0, 0.12)',
+                        overflow: 'hidden'
+                    }
+                }}
+            >
+                <DialogTitle
+                    sx={{
+                        p: 0,
+                        bgcolor: activityType.color || '#007AFF',
+                        color: 'white',
+                        position: 'relative'
+                    }}
+                >
+                    <Box sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        p: 3,
+                        gap: 2
+                    }}>
+                        <Avatar
+                            sx={{
+                                bgcolor: 'rgba(255, 255, 255, 0.2)',
+                                color: 'white',
+                                width: 48,
+                                height: 48
+                            }}
+                        >
+                            {getActivityIconWithProps(activityType.icon)}
+                        </Avatar>
+                        <Box sx={{ flex: 1 }}>
+                            <Typography
+                                variant="h6"
+                                sx={{
+                                    fontSize: '22px',
+                                    fontWeight: 600,
+                                    lineHeight: 1.2,
+                                    mb: 0.5
+                                }}
+                            >
+                                Track Activity
+                            </Typography>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    fontSize: '15px',
+                                    opacity: 0.9,
+                                    fontWeight: 400
+                                }}
+                            >
+                                {activityType.name}
+                            </Typography>
+                        </Box>
+                        <IconButton
+                            onClick={onClose}
+                            disabled={isSubmitting}
+                            sx={{
+                                color: 'white',
+                                '&:hover': {
+                                    bgcolor: 'rgba(255, 255, 255, 0.1)'
+                                }
+                            }}
+                        >
+                            <CloseIcon />
+                        </IconButton>
+                    </Box>
+                </DialogTitle>
+                <DialogContent sx={{ p: 3 }}>
+                    <Grid container spacing={2.5} sx={{ mt: 2 }}>
+                        {activityType.fields.map(field => (
+                            <Grid size={12} key={field.name}>
+                                {renderField(field)}
+                            </Grid>
+                        ))}
+                        <Grid size={12}>
+                            <TextField
+                                label="Notes (Optional)"
+                                multiline
+                                rows={3}
+                                fullWidth
+                                margin="dense"
+                                value={notes}
+                                onChange={handleNotesChange}
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        borderRadius: '8px',
+                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: activityType?.color || '#007AFF',
+                                            borderWidth: '2px'
+                                        }
+                                    }
+                                }}
+                            />
                         </Grid>
-                    ))}
-                    <Grid size={12}>
-                        <TextField
-                            label="Notes (Optional)"
-                            multiline
-                            rows={3}
-                            fullWidth
-                            margin="dense"
-                            value={notes}
-                            onChange={handleNotesChange}
-                        />
                     </Grid>
-                </Grid>
-                {(localError || error) && (
-                    <Typography color="error" variant="body2" sx={{ mt: 2 }}>{localError || error}</Typography>
-                )}
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose} color="secondary" disabled={isSubmitting}>Cancel</Button>
-                <Button onClick={handleSubmit} color="primary" variant="contained" disabled={isSubmitting || !!localError}>
-                    {isSubmitting ? <CircularProgress size={24} /> : 'Add'}
-                </Button>
-            </DialogActions>
-        </Dialog>
+                    {(localError || error) && (
+                        <Box
+                            sx={{
+                                mt: 2,
+                                p: 2,
+                                bgcolor: '#FFF5F5',
+                                borderRadius: '8px',
+                                borderLeft: '4px solid #FF3B30'
+                            }}
+                        >
+                            <Typography
+                                color="#FF3B30"
+                                variant="body2"
+                                sx={{
+                                    fontSize: '15px',
+                                    fontWeight: 500
+                                }}
+                            >
+                                {localError || error}
+                            </Typography>
+                        </Box>
+                    )}
+                </DialogContent>
+                <DialogActions sx={{ p: 3, pt: 1, gap: 2 }}>
+                    <Button
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                        sx={{
+                            textTransform: 'none',
+                            borderRadius: '8px',
+                            px: 3,
+                            py: 1.5,
+                            fontSize: '17px',
+                            fontWeight: 500,
+                            minWidth: '100px',
+                            color: '#6B7280',
+                            '&:hover': {
+                                bgcolor: 'rgba(0, 0, 0, 0.04)'
+                            }
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleSubmit}
+                        variant="contained"
+                        disabled={isSubmitting || !!localError}
+                        sx={{
+                            bgcolor: activityType?.color || '#007AFF',
+                            textTransform: 'none',
+                            borderRadius: '8px',
+                            px: 4,
+                            py: 1.5,
+                            fontSize: '17px',
+                            fontWeight: 600,
+                            minWidth: '120px',
+                            boxShadow: '0px 2px 8px rgba(0, 122, 255, 0.25)',
+                            '&:hover': {
+                                bgcolor: activityType?.color ? `${activityType.color}CC` : '#0062CC',
+                                boxShadow: '0px 4px 16px rgba(0, 122, 255, 0.35)'
+                            },
+                            '&:disabled': {
+                                bgcolor: '#E5E7EB',
+                                color: '#9CA3AF'
+                            }
+                        }}
+                    >
+                        {isSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Add'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <FoodSelectionDialog
+                open={foodDialogOpen}
+                onClose={handleFoodDialogClose}
+                onSave={handleFoodSave}
+                initialSelectedFoodPortions={currentFoodField ? (formState[currentFoodField] as FoodPortion[]) || [] : []}
+            />
+        </>
     );
 };
 

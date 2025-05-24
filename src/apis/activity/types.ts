@@ -9,7 +9,7 @@ export type ActivityTypeField = ServerActivityTypeField; // Alias for local use
 
 // Define the enum for field types based on ActivityTypeField.fieldType
 // Assuming ServerActivityTypeField has fieldType, otherwise this needs adjustment
-export const ActivityFieldTypeValues = ['Boolean', 'Number', 'Time', 'Date', 'Text', 'String'] as const;
+export const ActivityFieldTypeValues = ['Boolean', 'Number', 'Time', 'Date', 'Text', 'String', 'Foods'] as const;
 export type ActivityFieldTypeEnum = typeof ActivityFieldTypeValues[number];
 
 // Base interface for common fields
@@ -18,6 +18,7 @@ export interface ActivityTypeBase {
     type: string; // E.g., 'Exercise', 'Work', 'Hobby' - could be an enum or a separate collection later
     fields: ActivityTypeField[];
     color?: string;
+    icon?: string; // Material UI icon name
     isPredefined: boolean;
     predefinedId?: string; // if isPredefined is true, this links to the original predefined ID
     enabled: boolean;
@@ -55,6 +56,7 @@ export interface CreateActivityTypePayload {
     type: string;
     fields: ActivityTypeField[];
     color?: string;
+    icon?: string; // Material UI icon name
     isPredefined?: boolean;
     predefinedId?: string;
     enabled?: boolean;

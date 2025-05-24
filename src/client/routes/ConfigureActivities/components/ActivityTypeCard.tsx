@@ -5,24 +5,37 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { getActivityIconWithProps } from '@/client/utils/activityIcons';
 
-const PREDEFINED_COLORS = ['#E9D5FF', '#FFF7ED', '#E0F2F7', '#E8F5E9', '#FFEBEE', '#E1F5FE'];
-const cardColors = ['#E9D5FF', '#FFF7ED', '#E0F2F7', '#E8F5E9', '#FFEBEE', '#E1F5FE']; // Added more colors
-const iconAvatarColors = ['#EDE7F6', '#FFF3E0', '#E0F7FA', '#E8F5E9', '#FFCDD2', '#E3F2FD']; // Corresponding avatar BGs
-const iconColors = ['#673AB7', '#FF9800', '#00ACC1', '#4CAF50', '#D32F2F', '#1976D2']; // Corresponding icon colors
+// Component to render activity icon in the avatar
+const ActivityIconAvatar: React.FC<{ activityType: ActivityTypeClient }> = ({ activityType }) => {
+    const iconElement = getActivityIconWithProps(activityType.icon, {
+        sx: { color: 'white', fontSize: '1.2rem' }
+    });
+
+    if (iconElement) {
+        return iconElement;
+    }
+
+    // Fallback to SettingsIcon
+    return <SettingsIcon sx={{ color: 'white', fontSize: '1.2rem' }} />;
+};
+
+// Default color if none is set
+const DEFAULT_COLOR = '#007AFF';
 
 interface ActivityTypeCardProps {
     activityType: ActivityTypeClient;
     onEditClick: (activityType: ActivityTypeClient) => void;
     onDeleteClick: (activityTypeId: string) => void;
-    index: number;
 }
 
-export const ActivityTypeCard: React.FC<ActivityTypeCardProps> = ({ activityType, onEditClick, onDeleteClick, index }) => {
+export const ActivityTypeCard: React.FC<ActivityTypeCardProps> = ({ activityType, onEditClick, onDeleteClick }) => {
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const open = Boolean(anchorEl);
 
-    const handleClick = (event: React.MouseEvent<HTMLElement>) => {
+    const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+        event.stopPropagation();
         setAnchorEl(event.currentTarget);
     };
 
@@ -40,35 +53,59 @@ export const ActivityTypeCard: React.FC<ActivityTypeCardProps> = ({ activityType
         handleClose();
     };
 
-    const colorIndex = PREDEFINED_COLORS.indexOf(activityType.color || '') % cardColors.length;
-    const currentCardBorderColor = activityType.color || cardColors[index % cardColors.length];
-    const currentIconAvatarBgColor = iconAvatarColors[colorIndex >= 0 ? colorIndex : index % iconAvatarColors.length];
-    const currentIconColor = iconColors[colorIndex >= 0 ? colorIndex : index % iconColors.length];
+    const handleCardClick = () => {
+        onEditClick(activityType);
+    };
+
+    // Use the actual color from the database or fallback to default
+    const activityColor = activityType.color || DEFAULT_COLOR;
+
+    // Create a lighter version of the color for the background
+    const hexToRgba = (hex: string, alpha: number) => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+
+    const lightBackgroundColor = hexToRgba(activityColor, 0.1);
 
     return (
         <Card
             variant="outlined"
+            onClick={handleCardClick}
             sx={{
-                borderColor: currentCardBorderColor,
+                borderColor: activityColor,
                 borderWidth: 1.5,
-                borderRadius: 3,
-                height: '100%',
+                borderRadius: 2,
+                height: 'auto',
                 display: 'flex',
                 flexDirection: 'column',
                 boxShadow: 'none',
+                backgroundColor: lightBackgroundColor,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease-in-out',
                 '&:hover': {
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                    borderColor: currentIconColor,
+                    boxShadow: `0 4px 12px ${hexToRgba(activityColor, 0.25)}`,
+                    transform: 'translateY(-2px)',
+                    borderColor: activityColor,
                 }
             }}
         >
-            <CardContent sx={{ flexGrow: 1, p: 2.5 }}>
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                    <Avatar sx={{ bgcolor: currentIconAvatarBgColor, width: 48, height: 48 }}>
-                        <SettingsIcon sx={{ color: currentIconColor, fontSize: '1.6rem' }} />
+            <CardContent sx={{ flexGrow: 1, p: 2, '&:last-child': { pb: 2 } }}>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
+                    <Avatar sx={{ bgcolor: activityColor, width: 36, height: 36 }}>
+                        <ActivityIconAvatar activityType={activityType} />
                     </Avatar>
-                    <IconButton size="small" onClick={handleClick} sx={{ color: 'text.secondary' }}>
-                        <MoreVertIcon />
+                    <IconButton
+                        size="small"
+                        onClick={handleMenuClick}
+                        sx={{
+                            color: 'text.secondary',
+                            '&:hover': { backgroundColor: hexToRgba(activityColor, 0.1) }
+                        }}
+                    >
+                        <MoreVertIcon fontSize="small" />
                     </IconButton>
                     <Menu
                         anchorEl={anchorEl}
@@ -80,12 +117,6 @@ export const ActivityTypeCard: React.FC<ActivityTypeCardProps> = ({ activityType
                                 overflow: 'visible',
                                 filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
                                 mt: 1.5,
-                                '& .MuiAvatar-root': {
-                                    width: 32,
-                                    height: 32,
-                                    ml: -0.5,
-                                    mr: 1,
-                                },
                                 '&::before': {
                                     content: '""',
                                     display: 'block',
@@ -111,26 +142,45 @@ export const ActivityTypeCard: React.FC<ActivityTypeCardProps> = ({ activityType
                         </MenuItem>
                     </Menu>
                 </Box>
-                <Typography variant="h6" component="div" fontWeight="600" sx={{ mb: 0.75, color: 'text.primary' }}>
+                <Typography variant="subtitle1" component="div" fontWeight="600" sx={{ mb: 1, color: 'text.primary', lineHeight: 1.2 }}>
                     {activityType.name}
                 </Typography>
-                <Box display="flex" flexWrap="wrap" gap={1}>
-                    {activityType.fields.map((field, fieldIndex) => (
+                <Box display="flex" flexWrap="wrap" gap={0.5}>
+                    {activityType.fields.slice(0, 3).map((field, fieldIndex) => (
                         <Chip
                             key={fieldIndex}
-                            label={field.name + (field.fieldType === 'Text' ? '' : '*')}
+                            label={field.name}
                             size="small"
                             variant="outlined"
                             sx={{
-                                borderColor: currentIconAvatarBgColor,
-                                color: currentIconColor,
-                                backgroundColor: currentIconAvatarBgColor,
-                                fontWeight: 500
+                                borderColor: activityColor,
+                                color: 'text.secondary',
+                                backgroundColor: 'transparent',
+                                fontWeight: 500,
+                                fontSize: '0.7rem',
+                                height: 20
                             }}
                         />
                     ))}
+                    {activityType.fields.length > 3 && (
+                        <Chip
+                            label={`+${activityType.fields.length - 3}`}
+                            size="small"
+                            variant="outlined"
+                            sx={{
+                                borderColor: activityColor,
+                                color: 'text.secondary',
+                                backgroundColor: 'transparent',
+                                fontWeight: 500,
+                                fontSize: '0.7rem',
+                                height: 20
+                            }}
+                        />
+                    )}
                     {activityType.fields.length === 0 && (
-                        <Typography variant="caption" color="text.disabled">No fields defined.</Typography>
+                        <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.7rem' }}>
+                            No fields
+                        </Typography>
                     )}
                 </Box>
             </CardContent>

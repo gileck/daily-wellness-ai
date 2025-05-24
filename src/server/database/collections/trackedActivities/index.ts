@@ -1,2 +1,2 @@
-export { TrackedActivityCollection } from './collection';
+export * from './trackedActivities';
 export * from './types'; 

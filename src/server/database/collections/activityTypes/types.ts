@@ -2,7 +2,7 @@ import { ObjectId } from 'mongodb';
 
 export interface ActivityTypeField {
     name: string;
-    fieldType: 'Boolean' | 'Number' | 'Time' | 'Date' | 'Text' | 'String'; // 'String' as a synonym for 'Text'
+    fieldType: 'Boolean' | 'Number' | 'Time' | 'Date' | 'Text' | 'String' | 'Foods'; // 'String' as a synonym for 'Text'
     required?: boolean;
 }
 
@@ -12,6 +12,8 @@ export interface ActivityType {
     name: string;
     type: string; // e.g., sleep, meal, workout - for categorization
     description?: string;
+    color?: string; // Hex color value
+    icon?: string; // Material UI icon name
     fields: ActivityTypeField[];
     isPredefined: boolean; // Indicates if it's a system-provided default
     enabled: boolean; // User can enable/disable tracking for this type
@@ -25,6 +27,8 @@ export interface ActivityTypeDBSchema {
     name: string;
     type: string;
     description?: string;
+    color?: string; // Hex color value
+    icon?: string; // Material UI icon name
     fields: ActivityTypeField[];
     isPredefined: boolean;
     enabled: boolean;

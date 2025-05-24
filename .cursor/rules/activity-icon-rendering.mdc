@@ -1,0 +1,133 @@
+---
+description: when rendering activity icons in the UI
+globs: 
+alwaysApply: false
+---
+# Activity Icon Rendering Guidelines
+
+## Overview
+
+All activity icon rendering in the app must use the centralized utility at [src/client/utils/activityIcons.tsx](mdc:src/client/utils/activityIcons.tsx). **Never import Material UI icons directly for activity-related icons.**
+
+## Available Functions
+
+### `getActivityIcon(iconName)`
+Returns a React element or `null` if the icon doesn't exist.
+
+```tsx
+import { getActivityIcon } from '@/client/utils/activityIcons';
+
+// Basic usage
+const iconElement = getActivityIcon(activityType.icon);
+if (iconElement) {
+  return <Avatar>{iconElement}</Avatar>;
+}
+```
+
+### `getActivityIconWithProps(iconName, props)`
+Returns a React element with custom props or `null` if the icon doesn't exist.
+
+```tsx
+import { getActivityIconWithProps } from '@/client/utils/activityIcons';
+
+// With custom props
+const iconElement = getActivityIconWithProps(activityType.icon, {
+  sx: { fontSize: 24, color: 'white' }
+});
+```
+
+### `hasActivityIcon(iconName)`
+Checks if an icon exists without rendering it.
+
+```tsx
+import { hasActivityIcon } from '@/client/utils/activityIcons';
+
+if (hasActivityIcon(activityType.icon)) {
+  // Render icon-specific UI
+}
+```
+
+### `ICON_OPTIONS`
+Use for selection dialogs and forms where users pick icons.
+
+```tsx
+import { ICON_OPTIONS } from '@/client/utils/activityIcons';
+
+// In selection components
+{ICON_OPTIONS.map((option) => (
+  <MenuItem key={option.name} value={option.name}>
+    <option.component sx={{ mr: 1 }} />
+    {option.label}
+  </MenuItem>
+))}
+```
+
+## Key Principles
+
+### ✅ DO:
+- Use the centralized utility functions for all activity icons
+- Handle `null` returns gracefully (when icon doesn't exist)
+- Use `getActivityIconWithProps()` when you need custom styling
+- Import from `@/client/utils/activityIcons`
+
+### ❌ DON'T:
+- Import Material UI icons directly for activities (e.g., `import FitnessCenter from '@mui/icons-material/FitnessCenter'`)
+- Create default/fallback icons when activity icon is missing
+- Duplicate icon mappings in components
+- Assume an icon will always exist
+
+## Examples
+
+### Activity Card Component
+```tsx
+import { getActivityIconWithProps } from '@/client/utils/activityIcons';
+
+const ActivityCard = ({ activityType }) => {
+  const iconElement = getActivityIconWithProps(activityType.icon, {
+    sx: { fontSize: 28, color: 'white' }
+  });
+
+  return (
+    <Avatar sx={{ bgcolor: activityType.color }}>
+      {iconElement || (
+        // Fallback to text initials, not a default icon
+        <Typography>{activityType.name.substring(0, 2).toUpperCase()}</Typography>
+      )}
+    </Avatar>
+  );
+};
+```
+
+### Activity Selection Dialog
+```tsx
+import { ICON_OPTIONS } from '@/client/utils/activityIcons';
+
+const IconSelector = ({ value, onChange }) => (
+  <Select value={value} onChange={onChange}>
+    <MenuItem value="">No icon</MenuItem>
+    {ICON_OPTIONS.map((option) => (
+      <MenuItem key={option.name} value={option.name}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <option.component sx={{ fontSize: 20 }} />
+          {option.label}
+        </Box>
+      </MenuItem>
+    ))}
+  </Select>
+);
+```
+
+## Why This Approach?
+
+1. **Single Source of Truth**: All activity icons managed in one place
+2. **Consistent Behavior**: All components handle missing icons the same way
+3. **No Unwanted Defaults**: When an icon doesn't exist, `null` is returned instead of showing a default icon
+4. **Easy Maintenance**: Adding new icons only requires updating the centralized utility
+5. **Type Safety**: Full TypeScript support with proper error handling
+
+## Related Files
+
+- Main utility: [src/client/utils/activityIcons.tsx](mdc:src/client/utils/activityIcons.tsx)
+- Example usage in ActivityLog: [src/client/routes/ActivityLog/ActivityLogPage.tsx](mdc:src/client/routes/ActivityLog/ActivityLogPage.tsx)
+- Example usage in Home: [src/client/routes/Home/components/ActivityIcon.tsx](mdc:src/client/routes/Home/components/ActivityIcon.tsx)
+- Configuration dialog: [src/client/routes/ConfigureActivities/components/AddActivityTypeDialog.tsx](mdc:src/client/routes/ConfigureActivities/components/AddActivityTypeDialog.tsx)

@@ -1,6 +1,12 @@
 import { TrackedActivity as DBTrackedActivity, TrackedActivityValue as DBTrackedActivityValue } from '@/server/database/collections/trackedActivities/types';
 
-export type TrackedActivity = DBTrackedActivity;
+export interface TrackedActivity extends DBTrackedActivity {
+    activityType?: {
+        icon?: string;
+        color?: string;
+        type?: string;
+    };
+}
 export type TrackedActivityValue = DBTrackedActivityValue;
 
 export const API_TRACKED_ACTIVITIES = 'trackedActivities';

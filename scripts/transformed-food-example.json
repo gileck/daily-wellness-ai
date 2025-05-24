@@ -1,0 +1,30 @@
+{
+  "id": "usda-331897",
+  "name": "Chicken, broilers or fryers, drumstick, meat only, cooked, braised",
+  "brand": null,
+  "category": "Poultry Products",
+  "categorySimplified": "animal_proteins",
+  "nutritionPer100g": {
+    "calories": 156,
+    "protein": 23.9,
+    "carbs": 0,
+    "fat": 5.95,
+    "fiber": 0
+  },
+  "commonServings": [
+    {
+      "name": "with skin",
+      "gramsEquivalent": 104
+    },
+    {
+      "name": "without skin",
+      "gramsEquivalent": 94.7
+    }
+  ],
+  "isUserCreated": false,
+  "source": "usda",
+  "usdaFdcId": 331897,
+  "usdaDataType": "Foundation",
+  "createdAt": "2025-05-24T09:17:36.934Z",
+  "updatedAt": "2025-05-24T09:17:36.934Z"
+}

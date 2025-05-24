@@ -18,6 +18,8 @@
 - **name**: String
 - **type**: String (e.g., sleep, meal, workout)
 - **description**: String (optional)
+- **color**: String (optional, stores hex color value)
+- **icon**: String (optional, stores Material UI icon name)
 - **fields**: [
     - **name**: String
     - **fieldType**: String (Boolean, Number, Time, Date, Text, etc.)
@@ -32,6 +34,21 @@
 - **startTime**: Date
 - **fields**: Object (key-value pairs for type-specific fields)
 - **createdAt**: Date
+
+---
+
+## ActivityPresets
+- **_id**: ObjectId (Primary Key)
+- **userId**: ObjectId (ref: Users)
+- **activityTypeId**: ObjectId (ref: ActivityTypes)
+- **name**: String (user-defined name like "Good Night Sleep" or "Morning Coffee")
+- **description**: String (optional)
+- **presetFields**: Object (key-value pairs matching the activityType's fields)
+- **isActive**: Boolean (for soft delete/disable)
+- **usageCount**: Number (track frequency of use)
+- **lastUsedAt**: Date
+- **createdAt**: Date
+- **updatedAt**: Date
 
 ---
 

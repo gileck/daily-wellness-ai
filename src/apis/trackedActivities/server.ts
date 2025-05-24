@@ -1,11 +1,20 @@
 import { ApiHandlerContext } from '@/server/types';
-import { TrackedActivityCollection, TrackedActivityDBSchema } from '@/server/database/collections/trackedActivities';
+import {
+    createTrackedActivity,
+    getTrackedActivitiesWithType,
+    getTrackedActivityWithTypeById,
+    updateTrackedActivity as updateTrackedActivityInDb,
+    deleteTrackedActivity as deleteTrackedActivityInDb,
+    trackedActivityExists,
+    getTrackedActivityForDuplication
+} from '@/server/database/collections/trackedActivities';
 import {
     CreateTrackedActivityPayload,
     CreateTrackedActivityResponse,
     GetTrackedActivitiesParams,
     GetTrackedActivitiesResponse,
     TrackedActivity,
+    TrackedActivityValue,
     UpdateTrackedActivityPayload,
     UpdateTrackedActivityResponse,
     DeleteTrackedActivityPayload,
@@ -16,7 +25,37 @@ import {
 import { API_CREATE_TRACKED_ACTIVITY, API_GET_TRACKED_ACTIVITIES, API_UPDATE_TRACKED_ACTIVITY, API_DELETE_TRACKED_ACTIVITY, API_DUPLICATE_TRACKED_ACTIVITY } from './index';
 import { ObjectId } from 'mongodb';
 import { ServerError } from '@/server/utils/serverError';
-import mongoose from 'mongoose';
+
+// Helper function to convert database result to API response format
+const convertToApiFormat = (dbActivity: {
+    _id: ObjectId;
+    userId: ObjectId;
+    activityTypeId: ObjectId;
+    activityName: string;
+    timestamp: Date;
+    values: TrackedActivityValue[];
+    notes?: string;
+    createdAt: Date;
+    updatedAt: Date;
+    activityType?: {
+        icon?: string;
+        color?: string;
+        type?: string;
+    };
+}): TrackedActivity => {
+    return {
+        _id: dbActivity._id.toString(),
+        userId: dbActivity.userId.toString(),
+        activityTypeId: dbActivity.activityTypeId.toString(),
+        activityName: dbActivity.activityName,
+        timestamp: dbActivity.timestamp,
+        values: dbActivity.values,
+        notes: dbActivity.notes,
+        createdAt: dbActivity.createdAt,
+        updatedAt: dbActivity.updatedAt,
+        activityType: dbActivity.activityType
+    };
+};
 
 const createTrackedActivityProcess = async (
     payload: CreateTrackedActivityPayload,
@@ -30,13 +69,8 @@ const createTrackedActivityProcess = async (
             throw new ServerError(400, 'Missing required fields for tracking activity.');
         }
 
-        // Ensure MongoDB connection is established
-        if (mongoose.connection.readyState !== 1) {
-            console.error('MongoDB connection not ready. Current state:', mongoose.connection.readyState);
-            throw new ServerError(500, 'Database connection is not established.');
-        }
-
-        const newTrackedActivity = await TrackedActivityCollection.create({
+        // Create the activity using database layer
+        const activityId = await createTrackedActivity({
             userId: new ObjectId(userId),
             activityTypeId: new ObjectId(activityTypeId),
             activityName,
@@ -45,15 +79,13 @@ const createTrackedActivityProcess = async (
             notes,
         });
 
-        const result: TrackedActivity = {
-            ...newTrackedActivity.toObject(),
-            _id: newTrackedActivity._id.toString(),
-            userId: newTrackedActivity.userId.toString(),
-            activityTypeId: newTrackedActivity.activityTypeId.toString(),
-            createdAt: newTrackedActivity.createdAt,
-            updatedAt: newTrackedActivity.updatedAt,
-        };
-        return { trackedActivity: result };
+        // Get the created activity with populated ActivityType data
+        const result = await getTrackedActivityWithTypeById(activityId, new ObjectId(userId));
+        if (!result) {
+            throw new ServerError(500, 'Failed to retrieve created activity with type information.');
+        }
+
+        return { trackedActivity: convertToApiFormat(result) };
     } catch (error) {
         console.error('Error in createTrackedActivityProcess:', error);
         if (error instanceof ServerError) {
@@ -71,47 +103,24 @@ const getTrackedActivitiesProcess = async (
         const { userId } = context.state.user;
         const { limit = 20, offset = 0, startDate, endDate } = params;
 
-        // Ensure MongoDB connection is established
-        if (mongoose.connection.readyState !== 1) {
-            console.error('MongoDB connection not ready. Current state:', mongoose.connection.readyState);
-            throw new ServerError(500, 'Database connection is not established.');
-        }
+        const options = {
+            limit: Number(limit),
+            offset: Number(offset),
+            startDate: startDate ? new Date(startDate) : undefined,
+            endDate: endDate ? new Date(endDate) : undefined,
+        };
 
-        const query: Record<string, unknown> = { userId: new ObjectId(userId) };
-        if (startDate || endDate) {
-            query.timestamp = {};
-            if (startDate) (query.timestamp as Record<string, Date>).$gte = new Date(startDate);
-            if (endDate) (query.timestamp as Record<string, Date>).$lte = new Date(endDate);
-        }
+        const { activities, total } = await getTrackedActivitiesWithType(new ObjectId(userId), options);
 
-        const trackedActivitiesDocs = await TrackedActivityCollection.find(query)
-            .sort({ timestamp: -1 })
-            .skip(Number(offset))
-            .limit(Number(limit))
-            .lean<TrackedActivityDBSchema[]>();
-
-        const total = await TrackedActivityCollection.countDocuments(query);
-
-        const trackedActivities: TrackedActivity[] = trackedActivitiesDocs.map((doc: TrackedActivityDBSchema) => ({
-            ...doc,
-            _id: doc._id.toString(),
-            userId: doc.userId.toString(),
-            activityTypeId: doc.activityTypeId.toString(),
-            timestamp: doc.timestamp,
-            values: doc.values,
-            activityName: doc.activityName,
-            notes: doc.notes,
-            createdAt: doc.createdAt,
-            updatedAt: doc.updatedAt,
-        }));
+        const trackedActivities: TrackedActivity[] = activities.map(convertToApiFormat);
 
         return { trackedActivities, total };
     } catch (error) {
-        console.error('Error in getTrackedActivitiesProcess:', error);
+        console.error('Error fetching tracked activities:', error);
         if (error instanceof ServerError) {
             throw error;
         }
-        throw new ServerError(500, `Failed to get tracked activities: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new ServerError(500, 'Internal server error while fetching activities.');
     }
 };
 
@@ -127,48 +136,28 @@ const updateTrackedActivityProcess = async (
             throw new ServerError(400, 'Activity ID is required.');
         }
 
-        // Ensure MongoDB connection is established
-        if (mongoose.connection.readyState !== 1) {
-            console.error('MongoDB connection not ready. Current state:', mongoose.connection.readyState);
-            throw new ServerError(500, 'Database connection is not established.');
-        }
+        const activityObjectId = new ObjectId(activityId);
+        const userObjectId = new ObjectId(userId);
 
         // Verify the activity belongs to the user
-        const existingActivity = await TrackedActivityCollection.findOne({
-            _id: new ObjectId(activityId),
-            userId: new ObjectId(userId)
-        });
-
-        if (!existingActivity) {
+        const exists = await trackedActivityExists(activityObjectId, userObjectId);
+        if (!exists) {
             throw new ServerError(404, 'Tracked activity not found or you do not have permission.');
         }
 
         // Update the activity
-        const updatedActivity = await TrackedActivityCollection.findOneAndUpdate(
-            { _id: new ObjectId(activityId) },
-            { $set: updates },
-            { new: true }
-        ).lean<TrackedActivityDBSchema>();
-
-        if (!updatedActivity) {
-            throw new ServerError(404, 'Failed to update the activity.');
+        const updateSuccess = await updateTrackedActivityInDb(activityObjectId, userObjectId, updates);
+        if (!updateSuccess) {
+            throw new ServerError(500, 'Failed to update the activity.');
         }
 
-        // Convert ObjectIds to strings for client response
-        const trackedActivity: TrackedActivity = {
-            ...updatedActivity,
-            _id: updatedActivity._id.toString(),
-            userId: updatedActivity.userId.toString(),
-            activityTypeId: updatedActivity.activityTypeId.toString(),
-            timestamp: updatedActivity.timestamp,
-            values: updatedActivity.values,
-            activityName: updatedActivity.activityName,
-            notes: updatedActivity.notes,
-            createdAt: updatedActivity.createdAt,
-            updatedAt: updatedActivity.updatedAt,
-        };
+        // Get the updated activity with populated ActivityType data
+        const trackedActivity = await getTrackedActivityWithTypeById(activityObjectId, userObjectId);
+        if (!trackedActivity) {
+            throw new ServerError(404, 'Failed to retrieve updated activity.');
+        }
 
-        return { trackedActivity };
+        return { trackedActivity: convertToApiFormat(trackedActivity) };
     } catch (error) {
         console.error('Error updating tracked activity:', error);
         if (error instanceof ServerError) {
@@ -190,29 +179,18 @@ const deleteTrackedActivityProcess = async (
             throw new ServerError(400, 'Activity ID is required.');
         }
 
-        // Ensure MongoDB connection is established
-        if (mongoose.connection.readyState !== 1) {
-            console.error('MongoDB connection not ready. Current state:', mongoose.connection.readyState);
-            throw new ServerError(500, 'Database connection is not established.');
-        }
+        const activityObjectId = new ObjectId(activityId);
+        const userObjectId = new ObjectId(userId);
 
         // Verify the activity belongs to the user
-        const existingActivity = await TrackedActivityCollection.findOne({
-            _id: new ObjectId(activityId),
-            userId: new ObjectId(userId)
-        });
-
-        if (!existingActivity) {
+        const exists = await trackedActivityExists(activityObjectId, userObjectId);
+        if (!exists) {
             throw new ServerError(404, 'Tracked activity not found or you do not have permission.');
         }
 
         // Delete the activity
-        const result = await TrackedActivityCollection.deleteOne({
-            _id: new ObjectId(activityId),
-            userId: new ObjectId(userId)
-        });
-
-        if (result.deletedCount !== 1) {
+        const deleteSuccess = await deleteTrackedActivityInDb(activityObjectId, userObjectId);
+        if (!deleteSuccess) {
             throw new ServerError(500, 'Failed to delete the activity.');
         }
 
@@ -238,24 +216,17 @@ const duplicateTrackedActivityProcess = async (
             throw new ServerError(400, 'Activity ID is required.');
         }
 
-        // Ensure MongoDB connection is established
-        if (mongoose.connection.readyState !== 1) {
-            console.error('MongoDB connection not ready. Current state:', mongoose.connection.readyState);
-            throw new ServerError(500, 'Database connection is not established.');
-        }
+        const activityObjectId = new ObjectId(activityId);
+        const userObjectId = new ObjectId(userId);
 
         // Find the activity to duplicate
-        const existingActivity = await TrackedActivityCollection.findOne({
-            _id: new ObjectId(activityId),
-            userId: new ObjectId(userId)
-        }).lean<TrackedActivityDBSchema>();
-
+        const existingActivity = await getTrackedActivityForDuplication(activityObjectId, userObjectId);
         if (!existingActivity) {
             throw new ServerError(404, 'Tracked activity not found or you do not have permission.');
         }
 
         // Create a duplicate with a new timestamp
-        const newTrackedActivity = await TrackedActivityCollection.create({
+        const newActivityId = await createTrackedActivity({
             userId: existingActivity.userId,
             activityTypeId: existingActivity.activityTypeId,
             activityName: existingActivity.activityName,
@@ -264,21 +235,13 @@ const duplicateTrackedActivityProcess = async (
             notes: existingActivity.notes
         });
 
-        // Convert ObjectIds to strings for client response
-        const trackedActivity: TrackedActivity = {
-            ...newTrackedActivity.toObject(),
-            _id: newTrackedActivity._id.toString(),
-            userId: newTrackedActivity.userId.toString(),
-            activityTypeId: newTrackedActivity.activityTypeId.toString(),
-            timestamp: newTrackedActivity.timestamp,
-            values: newTrackedActivity.values,
-            activityName: newTrackedActivity.activityName,
-            notes: newTrackedActivity.notes,
-            createdAt: newTrackedActivity.createdAt,
-            updatedAt: newTrackedActivity.updatedAt,
-        };
+        // Get the duplicated activity with populated ActivityType data
+        const trackedActivity = await getTrackedActivityWithTypeById(newActivityId, userObjectId);
+        if (!trackedActivity) {
+            throw new ServerError(500, 'Failed to retrieve duplicated activity with type information.');
+        }
 
-        return { trackedActivity };
+        return { trackedActivity: convertToApiFormat(trackedActivity) };
     } catch (error) {
         console.error('Error duplicating tracked activity:', error);
         if (error instanceof ServerError) {

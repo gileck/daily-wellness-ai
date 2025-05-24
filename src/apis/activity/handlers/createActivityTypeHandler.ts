@@ -16,6 +16,7 @@ export const process = async (
         type: payload.type,
         fields: payload.fields,
         color: payload.color,
+        icon: payload.icon,
         isPredefined: payload.isPredefined || false,
         predefinedId: payload.predefinedId,
         enabled: payload.enabled === undefined ? true : payload.enabled,

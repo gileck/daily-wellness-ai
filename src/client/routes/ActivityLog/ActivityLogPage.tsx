@@ -1,17 +1,61 @@
-import React, { useState } from 'react';
-import { Typography, Box, CircularProgress, Alert, List, ListItem, ListItemText, Divider, Button, Card, CardContent, Snackbar } from '@mui/material';
+import React, { useState, useMemo } from 'react';
+import { Typography, Box, CircularProgress, Alert, List, ListItem, ListItemText, Divider, Button, Card, CardContent, Snackbar, Checkbox, ListItemIcon, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Chip, Avatar } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
+import FilterListIcon from '@mui/icons-material/FilterList';
+
 import { useActivityLogData } from './hooks/useActivityLogData';
-import { format } from 'date-fns';
+import { format, isAfter, isBefore, startOfDay, endOfDay } from 'date-fns';
 import { TrackedActivity, TrackedActivityValue, UpdateTrackedActivityPayload } from '@/apis/trackedActivities/types';
 import { ActivityActions } from './components/ActivityActions';
 import { ActivityEditDialog } from './components/ActivityEditDialog';
+import { ActivityFilterDialog } from './components/ActivityFilterDialog';
+import { getActivityIcon } from '@/client/utils/activityIcons';
+import { formatFieldValue } from '@/client/utils/foodDisplayUtils';
+
+const getActivityIconForTrackedActivity = (activity: TrackedActivity): React.ReactElement | null => {
+    // Use the icon from the activity type if available
+    if (activity.activityType?.icon) {
+        console.log(`Using database icon "${activity.activityType.icon}" for activity "${activity.activityName}"`);
+        return getActivityIcon(activity.activityType.icon);
+    }
+
+    // No database icon found, don't show an icon
+    console.log(`No database icon found for activity "${activity.activityName}", not showing icon`);
+    return null;
+};
+
+const getActivityColor = (activity: TrackedActivity): string => {
+    // Use the color from the activity type if available
+    if (activity.activityType?.color) {
+        console.log(`Using database color "${activity.activityType.color}" for activity "${activity.activityName}"`);
+        return activity.activityType.color;
+    }
+    // Default color
+    return '#007AFF';
+};
 
 export const ActivityLogPage = () => {
     const [selectedActivity, setSelectedActivity] = useState<TrackedActivity | null>(null);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState<string>('');
     const [isSnackbarOpen, setIsSnackbarOpen] = useState(false);
+    const [selectedActivities, setSelectedActivities] = useState<Set<string>>(new Set());
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+    const [deleteAction, setDeleteAction] = useState<(() => Promise<void>) | null>(null);
+    const [deleteMessage, setDeleteMessage] = useState<string>('');
+    const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+    const [filters, setFilters] = useState<{
+        selectedActivityNames: string[];
+        dateFrom: Date | null;
+        dateTo: Date | null;
+    }>({
+        selectedActivityNames: [],
+        dateFrom: null,
+        dateTo: null
+    });
 
     const {
         trackedActivities,
@@ -22,6 +66,41 @@ export const ActivityLogPage = () => {
         removeActivity,
         duplicateActivity
     } = useActivityLogData();
+
+    const uniqueActivityNames = useMemo(() => {
+        return Array.from(new Set(trackedActivities.map(activity => activity.activityName))).sort();
+    }, [trackedActivities]);
+
+    const filteredActivities = useMemo(() => {
+        console.log(`Total tracked activities received: ${trackedActivities.length}`);
+
+        // Debug: Log the first few activities to see ActivityType data
+        trackedActivities.slice(0, 3).forEach((activity, index) => {
+            console.log(`Activity ${index + 1}: "${activity.activityName}"`, {
+                activityType: activity.activityType,
+                hasIcon: !!activity.activityType?.icon,
+                hasColor: !!activity.activityType?.color
+            });
+        });
+
+        return trackedActivities.filter(activity => {
+            // Filter by activity name
+            if (filters.selectedActivityNames.length > 0 && !filters.selectedActivityNames.includes(activity.activityName)) {
+                return false;
+            }
+
+            // Filter by date range
+            const activityDate = new Date(activity.timestamp);
+            if (filters.dateFrom && isBefore(activityDate, startOfDay(filters.dateFrom))) {
+                return false;
+            }
+            if (filters.dateTo && isAfter(activityDate, endOfDay(filters.dateTo))) {
+                return false;
+            }
+
+            return true;
+        });
+    }, [trackedActivities, filters]);
 
     const handleEditClick = (activity: TrackedActivity) => {
         setSelectedActivity(activity);
@@ -43,12 +122,16 @@ export const ActivityLogPage = () => {
     };
 
     const handleDeleteActivity = async (activityId: string) => {
-        const success = await removeActivity(activityId);
-        if (success) {
-            setSnackbarMessage('Activity deleted successfully');
-            setIsSnackbarOpen(true);
-        }
-        return success;
+        setDeleteMessage('Are you sure you want to delete this activity? This action cannot be undone.');
+        setDeleteAction(() => async () => {
+            const success = await removeActivity(activityId);
+            if (success) {
+                setSnackbarMessage('Activity deleted successfully');
+                setIsSnackbarOpen(true);
+            }
+        });
+        setIsDeleteConfirmOpen(true);
+        return true;
     };
 
     const handleDuplicateActivity = async (activityId: string) => {
@@ -63,6 +146,85 @@ export const ActivityLogPage = () => {
     const handleSnackbarClose = () => {
         setIsSnackbarOpen(false);
     };
+
+    const handleSelectActivity = (activityId: string) => {
+        setSelectedActivities(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(activityId)) {
+                newSet.delete(activityId);
+            } else {
+                newSet.add(activityId);
+            }
+            return newSet;
+        });
+    };
+
+    const handleSelectAll = () => {
+        if (selectedActivities.size === filteredActivities.length) {
+            setSelectedActivities(new Set());
+        } else {
+            setSelectedActivities(new Set(filteredActivities.map(activity => activity._id)));
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedActivities.size === 0) return;
+
+        setDeleteMessage(`Are you sure you want to delete ${selectedActivities.size} ${selectedActivities.size === 1 ? 'activity' : 'activities'}? This action cannot be undone.`);
+        setDeleteAction(() => async () => {
+            let successCount = 0;
+            for (const activityId of selectedActivities) {
+                const success = await removeActivity(activityId);
+                if (success) {
+                    successCount++;
+                }
+            }
+
+            if (successCount > 0) {
+                setSnackbarMessage(`${successCount} ${successCount === 1 ? 'activity' : 'activities'} deleted successfully`);
+                setIsSnackbarOpen(true);
+                setSelectedActivities(new Set());
+            }
+        });
+        setIsDeleteConfirmOpen(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (deleteAction) {
+            await deleteAction();
+        }
+        setIsDeleteConfirmOpen(false);
+        setDeleteAction(null);
+        setDeleteMessage('');
+    };
+
+    const handleCancelDelete = () => {
+        setIsDeleteConfirmOpen(false);
+        setDeleteAction(null);
+        setDeleteMessage('');
+    };
+
+    const handleToggleEditMode = () => {
+        setIsEditMode(prev => !prev);
+        if (isEditMode) {
+            setSelectedActivities(new Set());
+        }
+    };
+
+    const handleOpenFilterDialog = () => {
+        setIsFilterDialogOpen(true);
+    };
+
+    const handleCloseFilterDialog = () => {
+        setIsFilterDialogOpen(false);
+    };
+
+    const handleApplyFilters = (newFilters: typeof filters) => {
+        setFilters(newFilters);
+        setIsFilterDialogOpen(false);
+    };
+
+    const hasActiveFilters = filters.selectedActivityNames.length > 0 || filters.dateFrom || filters.dateTo;
 
     if (isLoading && trackedActivities.length === 0) {
         return (
@@ -87,26 +249,115 @@ export const ActivityLogPage = () => {
                 Activity Log
             </Typography>
 
-            <Button
-                onClick={() => fetchActivities()}
-                disabled={isLoading}
-                variant="contained"
-                startIcon={<RefreshIcon />}
-                sx={{
-                    mb: 3,
-                    bgcolor: '#007AFF',
-                    borderRadius: '8px',
-                    textTransform: 'none',
-                    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
-                    '&:hover': {
-                        bgcolor: '#0062CC'
-                    },
-                    fontSize: '16px',
-                    fontWeight: 500,
-                }}
-            >
-                Refresh
-            </Button>
+            <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
+                <Button
+                    onClick={() => fetchActivities()}
+                    disabled={isLoading}
+                    variant="contained"
+                    startIcon={<RefreshIcon />}
+                    sx={{
+                        bgcolor: '#007AFF',
+                        borderRadius: '8px',
+                        textTransform: 'none',
+                        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+                        '&:hover': {
+                            bgcolor: '#0062CC'
+                        },
+                        fontSize: '16px',
+                        fontWeight: 500,
+                    }}
+                >
+                    Refresh
+                </Button>
+
+                <Button
+                    onClick={handleToggleEditMode}
+                    variant={isEditMode ? "contained" : "outlined"}
+                    startIcon={<EditIcon />}
+                    sx={{
+                        borderRadius: '8px',
+                        textTransform: 'none',
+                        fontSize: '16px',
+                        fontWeight: 500,
+                        ...(isEditMode ? {
+                            bgcolor: '#FF9500',
+                            '&:hover': {
+                                bgcolor: '#E6850E'
+                            }
+                        } : {
+                            borderColor: '#FF9500',
+                            color: '#FF9500',
+                            '&:hover': {
+                                borderColor: '#E6850E',
+                                bgcolor: 'rgba(255, 149, 0, 0.04)'
+                            }
+                        })
+                    }}
+                >
+                    {isEditMode ? 'Exit Edit' : 'Edit'}
+                </Button>
+
+                <Button
+                    onClick={handleOpenFilterDialog}
+                    variant={hasActiveFilters ? "contained" : "outlined"}
+                    startIcon={<FilterListIcon />}
+                    sx={{
+                        borderRadius: '8px',
+                        textTransform: 'none',
+                        fontSize: '16px',
+                        fontWeight: 500,
+                        ...(hasActiveFilters ? {
+                            bgcolor: '#34C759',
+                            '&:hover': {
+                                bgcolor: '#2DB84D'
+                            }
+                        } : {
+                            borderColor: '#34C759',
+                            color: '#34C759',
+                            '&:hover': {
+                                borderColor: '#2DB84D',
+                                bgcolor: 'rgba(52, 199, 89, 0.04)'
+                            }
+                        })
+                    }}
+                >
+                    Filter {hasActiveFilters && `(${filteredActivities.length})`}
+                </Button>
+            </Box>
+
+            {isEditMode && filteredActivities.length > 0 && (
+                <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
+                    <Button
+                        onClick={handleSelectAll}
+                        variant="outlined"
+                        sx={{
+                            borderRadius: '8px',
+                            textTransform: 'none',
+                            fontSize: '16px',
+                            fontWeight: 500,
+                        }}
+                    >
+                        {selectedActivities.size === filteredActivities.length ? 'Deselect All' : 'Select All'}
+                    </Button>
+
+                    {selectedActivities.size > 0 && (
+                        <Button
+                            onClick={handleBulkDelete}
+                            variant="contained"
+                            color="error"
+                            startIcon={<DeleteIcon />}
+                            sx={{
+                                borderRadius: '8px',
+                                textTransform: 'none',
+                                fontSize: '16px',
+                                fontWeight: 500,
+                            }}
+                        >
+                            Delete Selected ({selectedActivities.size})
+                        </Button>
+                    )}
+                </Box>
+            )}
 
             {error && (
                 <Alert
@@ -121,7 +372,7 @@ export const ActivityLogPage = () => {
                 </Alert>
             )}
 
-            {trackedActivities.length === 0 && !isLoading && !error && (
+            {filteredActivities.length === 0 && !isLoading && !error && (
                 <Alert
                     severity="info"
                     sx={{
@@ -130,7 +381,7 @@ export const ActivityLogPage = () => {
                         '& .MuiAlert-icon': { color: '#5AC8FA' }
                     }}
                 >
-                    No activities found.
+                    {hasActiveFilters ? 'No activities match the current filters.' : 'No activities found.'}
                 </Alert>
             )}
 
@@ -144,7 +395,7 @@ export const ActivityLogPage = () => {
             >
                 <CardContent sx={{ p: 0 }}>
                     <List sx={{ width: '100%' }}>
-                        {trackedActivities.map((activity: TrackedActivity, index: number) => (
+                        {filteredActivities.map((activity: TrackedActivity, index: number) => (
                             <React.Fragment key={activity._id}>
                                 <ListItem
                                     alignItems="flex-start"
@@ -156,6 +407,35 @@ export const ActivityLogPage = () => {
                                         }
                                     }}
                                 >
+                                    {isEditMode && (
+                                        <ListItemIcon sx={{ minWidth: 'auto', mr: 2 }}>
+                                            <Checkbox
+                                                checked={selectedActivities.has(activity._id)}
+                                                onChange={() => handleSelectActivity(activity._id)}
+                                                sx={{
+                                                    color: '#007AFF',
+                                                    '&.Mui-checked': {
+                                                        color: '#007AFF',
+                                                    },
+                                                }}
+                                            />
+                                        </ListItemIcon>
+                                    )}
+
+                                    {getActivityIconForTrackedActivity(activity) && (
+                                        <Avatar
+                                            sx={{
+                                                bgcolor: getActivityColor(activity),
+                                                width: 40,
+                                                height: 40,
+                                                mr: 2,
+                                                mt: 0.5
+                                            }}
+                                        >
+                                            {getActivityIconForTrackedActivity(activity)}
+                                        </Avatar>
+                                    )}
+
                                     <ListItemText
                                         primary={
                                             <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -198,54 +478,53 @@ export const ActivityLogPage = () => {
                                                         sx={{
                                                             mt: 1,
                                                             fontSize: '15px',
-                                                            color: 'text.primary'
+                                                            color: 'text.primary',
+                                                            mb: 1.5
                                                         }}
                                                     >
                                                         {activity.notes}
                                                     </Typography>
                                                 )}
-                                                <Box sx={{ mt: 1.5 }}>
-                                                    {activity.values.map((val: TrackedActivityValue) => (
-                                                        <Box
-                                                            key={val.fieldName}
-                                                            sx={{
-                                                                display: 'flex',
-                                                                justifyContent: 'space-between',
-                                                                mb: 0.5,
-                                                                p: 1,
-                                                                borderRadius: '6px',
-                                                                bgcolor: '#F2F2F7',
-                                                            }}
-                                                        >
-                                                            <Typography
-                                                                variant="body2"
-                                                                component="span"
+                                                <Box sx={{ mt: 1.5, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                                    {activity.values.map((val: TrackedActivityValue) => {
+                                                        const formattedValue = formatFieldValue(val.fieldName, val.value);
+
+                                                        // If it's a React node (food chips), render directly
+                                                        if (React.isValidElement(formattedValue)) {
+                                                            return (
+                                                                <Box key={val.fieldName} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                                    <Typography variant="body2" sx={{ fontSize: '13px', color: '#007AFF', fontWeight: 500 }}>
+                                                                        {val.fieldName}:
+                                                                    </Typography>
+                                                                    {formattedValue}
+                                                                </Box>
+                                                            );
+                                                        }
+
+                                                        // Otherwise render as chip
+                                                        return (
+                                                            <Chip
+                                                                key={val.fieldName}
+                                                                label={formattedValue}
+                                                                variant="outlined"
+                                                                size="small"
                                                                 sx={{
-                                                                    fontSize: '15px',
-                                                                    fontWeight: 500,
-                                                                    color: 'text.secondary',
+                                                                    borderColor: '#007AFF',
+                                                                    color: '#007AFF',
+                                                                    fontSize: '13px',
+                                                                    '& .MuiChip-label': {
+                                                                        px: 1.5
+                                                                    }
                                                                 }}
-                                                            >
-                                                                {val.fieldName}
-                                                            </Typography>
-                                                            <Typography
-                                                                variant="body2"
-                                                                component="span"
-                                                                sx={{
-                                                                    fontSize: '15px',
-                                                                    fontWeight: 400,
-                                                                }}
-                                                            >
-                                                                {String(val.value)}
-                                                            </Typography>
-                                                        </Box>
-                                                    ))}
+                                                            />
+                                                        );
+                                                    })}
                                                 </Box>
                                             </>
                                         }
                                     />
                                 </ListItem>
-                                {index < trackedActivities.length - 1 && <Divider />}
+                                {index < filteredActivities.length - 1 && <Divider />}
                             </React.Fragment>
                         ))}
                     </List>
@@ -259,6 +538,14 @@ export const ActivityLogPage = () => {
                 onSave={handleUpdateActivity}
             />
 
+            <ActivityFilterDialog
+                open={isFilterDialogOpen}
+                onClose={handleCloseFilterDialog}
+                onApply={handleApplyFilters}
+                availableActivities={uniqueActivityNames}
+                currentFilters={filters}
+            />
+
             <Snackbar
                 open={isSnackbarOpen}
                 autoHideDuration={5000}
@@ -266,6 +553,30 @@ export const ActivityLogPage = () => {
                 message={snackbarMessage}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             />
+
+            <Dialog
+                open={isDeleteConfirmOpen}
+                onClose={handleCancelDelete}
+                aria-labelledby="delete-confirm-dialog-title"
+                aria-describedby="delete-confirm-dialog-description"
+            >
+                <DialogTitle id="delete-confirm-dialog-title">
+                    Confirm Delete
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText id="delete-confirm-dialog-description">
+                        {deleteMessage}
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCancelDelete} color="primary">
+                        Cancel
+                    </Button>
+                    <Button onClick={handleConfirmDelete} color="error" variant="contained">
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }; 

@@ -8,7 +8,11 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { AddActivityTypeDialog } from './components/AddActivityTypeDialog';
 import { AddWellnessMetricDialog } from './components/AddWellnessMetricDialog';
 import { ActivityTypeCard } from './components/ActivityTypeCard';
+import { ActivityPresetCard } from './components/ActivityPresetCard';
+import { AddActivityPresetDialog } from './components/AddActivityPresetDialog';
 import { useActivityConfigurationDashboard } from './hooks/useActivityConfigurationDashboard';
+import { useActivityPresets } from './hooks/useActivityPresets';
+import { ActivityPresetClient, CreateActivityPresetPayload } from '@/apis/activityPresets/types';
 
 export const ActivityConfigurationDashboard: React.FC = () => {
     const {
@@ -34,6 +38,36 @@ export const ActivityConfigurationDashboard: React.FC = () => {
         handleCloseAddMetricDialog,
         isItemAddedAndEnabled,
     } = useActivityConfigurationDashboard();
+
+    const {
+        presets,
+        isLoading: presetsLoading,
+        isSubmitting: presetsSubmitting,
+        handleCreatePreset,
+        handleUpdatePreset,
+        handleDeletePreset
+    } = useActivityPresets();
+
+    const [openAddPresetDialog, setOpenAddPresetDialog] = React.useState(false);
+    const [editingPreset, setEditingPreset] = React.useState<ActivityPresetClient | null>(null);
+
+    const handleOpenAddPresetDialog = (presetToEdit?: ActivityPresetClient) => {
+        setEditingPreset(presetToEdit || null);
+        setOpenAddPresetDialog(true);
+    };
+
+    const handleCloseAddPresetDialog = () => {
+        setOpenAddPresetDialog(false);
+        setEditingPreset(null);
+    };
+
+    const handleSavePreset = async (payload: CreateActivityPresetPayload | { presetId: string; updates: Partial<Pick<ActivityPresetClient, 'name' | 'description' | 'presetFields'>> }) => {
+        if ('presetId' in payload) {
+            await handleUpdatePreset(payload.presetId, payload.updates);
+        } else {
+            await handleCreatePreset(payload);
+        }
+    };
 
     if (isLoading && !userActivityTypes.length && !predefinedData && !userWellnessMetrics.length) {
         return (
@@ -103,31 +137,90 @@ export const ActivityConfigurationDashboard: React.FC = () => {
 
                 {error && Object.values(isSubmitting).some(s => s) && <Alert severity="error" sx={{ mb: 2.5 }}>{error}</Alert>}
 
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', mx: -1.5, rowGap: 3 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', mx: -1, rowGap: 2 }}>
                     {isLoading && userActivityTypes.filter(at => at.enabled).length === 0 ? (
-                        <Box sx={{ p: 1.5, width: '100%', display: 'flex', justifyContent: 'center', my: 4 }}> <CircularProgress /> </Box>
+                        <Box sx={{ p: 1, width: '100%', display: 'flex', justifyContent: 'center', my: 4 }}> <CircularProgress /> </Box>
                     ) : userActivityTypes.filter(at => at.enabled).length > 0 ? (
                         userActivityTypes
                             .filter(at => at.enabled)
-                            .map((activityType, index) => (
-                                <Box sx={{ p: 1.5, width: { xs: '100%', sm: '50%', md: '33.3333%' } }} key={activityType._id}>
+                            .map((activityType) => (
+                                <Box sx={{ p: 1, width: { xs: '100%', sm: '50%', md: '33.3333%', lg: '25%' } }} key={activityType._id}>
                                     <ActivityTypeCard
                                         activityType={activityType}
                                         onEditClick={handleOpenAddActivityDialog}
                                         onDeleteClick={handleDeleteActivityType}
-                                        index={index}
                                     />
                                 </Box>
                             ))
                     ) : (
                         !isLoading && (
-                            <Box sx={{ p: 1.5, width: '100%' }}>
+                            <Box sx={{ p: 1, width: '100%' }}>
                                 <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', borderColor: 'divider', borderRadius: 2, backgroundColor: 'background.paper' }}>
                                     <Typography variant="subtitle1" sx={{ color: 'text.secondary' }}>
                                         No activity types are currently enabled.
                                     </Typography>
                                     <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
                                         Enable a predefined activity type from &quot;Available Templates&quot; below or click &quot;New Type&quot; to create your own.
+                                    </Typography>
+                                </Paper>
+                            </Box>
+                        )
+                    )}
+                </Box>
+            </Paper>
+
+            {/* Activity Presets Section */}
+            <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, mb: 5, borderRadius: 4, backgroundColor: 'rgba(0,0,0,0.02)' }}>
+                <Box display="flex" justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} flexDirection={{ xs: 'column', sm: 'row' }} mb={3.5}>
+                    <Box mb={{ xs: 2.5, sm: 0 }}>
+                        <Typography variant="h5" component="h2" sx={{ fontWeight: '600', color: 'text.primary' }}>
+                            Activity Presets
+                        </Typography>
+                        <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
+                            Create presets with pre-filled field values for quick activity tracking.
+                        </Typography>
+                    </Box>
+                    <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={() => handleOpenAddPresetDialog()}
+                        disabled={Object.values(presetsSubmitting).some(s => s)}
+                        sx={{
+                            backgroundColor: '#1A2027',
+                            color: 'white',
+                            '&:hover': { backgroundColor: '#343A40' },
+                            alignSelf: { xs: 'flex-start', sm: 'auto' },
+                            px: 2.5, py: 1.25,
+                            borderRadius: 2,
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                        }}
+                    >
+                        New Preset
+                    </Button>
+                </Box>
+
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', mx: -1.5, rowGap: 3 }}>
+                    {presetsLoading ? (
+                        <Box sx={{ p: 1.5, width: '100%', display: 'flex', justifyContent: 'center', my: 4 }}> <CircularProgress /> </Box>
+                    ) : presets.length > 0 ? (
+                        presets.map((preset) => (
+                            <Box sx={{ p: 1.5, width: { xs: '100%', sm: '50%', md: '33.3333%' } }} key={preset._id}>
+                                <ActivityPresetCard
+                                    preset={preset}
+                                    onEdit={handleOpenAddPresetDialog}
+                                    onDelete={handleDeletePreset}
+                                />
+                            </Box>
+                        ))
+                    ) : (
+                        !presetsLoading && (
+                            <Box sx={{ p: 1.5, width: '100%' }}>
+                                <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', borderColor: 'divider', borderRadius: 2, backgroundColor: 'background.paper' }}>
+                                    <Typography variant="subtitle1" sx={{ color: 'text.secondary' }}>
+                                        No activity presets created yet.
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
+                                        Create presets to quickly track activities with pre-filled field values.
                                     </Typography>
                                 </Paper>
                             </Box>
@@ -294,6 +387,13 @@ export const ActivityConfigurationDashboard: React.FC = () => {
                 onClose={handleCloseAddMetricDialog}
                 onSubmit={handleSaveWellnessMetric}
                 metricToEdit={editingWellnessMetric}
+            />
+            <AddActivityPresetDialog
+                open={openAddPresetDialog}
+                onClose={handleCloseAddPresetDialog}
+                onSubmit={handleSavePreset}
+                activityTypes={userActivityTypes.filter(at => at.enabled)}
+                presetToEdit={editingPreset}
             />
         </Container>
     );

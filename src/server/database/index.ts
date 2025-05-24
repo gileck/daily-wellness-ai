@@ -13,7 +13,6 @@ const DB_NAME = appConfig.dbName;
 let client: MongoClient | null = null;
 let dbInstance: Db | null = null;
 let clientPromise: Promise<MongoClient> | null = null;
-
 // Internal function returning the client
 async function connectClient(): Promise<MongoClient> {
     if (client) {

@@ -7,6 +7,7 @@ import { Profile } from './Profile';
 import ConfigureActivities from './ConfigureActivities';
 import HistoryPage from './History';
 import ActivityLogPage from './ActivityLog';
+import { FoodsManagement } from './FoodsManagement';
 
 // Define routes
 export const routes = createRoutes({
@@ -17,5 +18,6 @@ export const routes = createRoutes({
   '/configure-activities': ConfigureActivities,
   '/history': HistoryPage,
   '/activity-log': ActivityLogPage,
+  '/foods-management': FoodsManagement,
   '/not-found': NotFound,
 });

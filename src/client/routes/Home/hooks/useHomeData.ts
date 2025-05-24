@@ -1,8 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
 import { getActivityTypes } from '@/apis/activity/client';
 import { ActivityTypeClient } from '@/apis/activity/types';
-import { createTrackedActivity } from '@/apis/trackedActivities/client';
-import { CreateTrackedActivityPayload, TrackedActivityValue } from '@/apis/trackedActivities/types';
+import { getActivityPresets } from '@/apis/activityPresets/client';
+import { ActivityPresetClient } from '@/apis/activityPresets/types';
+import { createTrackedActivity, getTrackedActivities } from '@/apis/trackedActivities/client';
+import { CreateTrackedActivityPayload, TrackedActivityValue, TrackedActivity } from '@/apis/trackedActivities/types';
 
 // Interface for recently logged activities
 export interface RecentlyLoggedActivity {
@@ -12,20 +14,23 @@ export interface RecentlyLoggedActivity {
 
 export interface HomeDataState {
     activityTypes: ActivityTypeClient[];
+    activityPresets: ActivityPresetClient[];
     isLoading: boolean;
     error: string | null;
     isSubmitting: boolean;
     successMessage: string | null;
     lastLoggedTimes: Record<string, Date>;
-    recentlyLoggedActivities: RecentlyLoggedActivity[];
+    recentlyLoggedActivities: TrackedActivity[];
     trackingDialog: {
         open: boolean;
         activityType: ActivityTypeClient | null;
+        presetValues?: Record<string, unknown>;
     };
 }
 
 const getDefaultState = (): HomeDataState => ({
     activityTypes: [],
+    activityPresets: [],
     isLoading: true,
     error: null,
     isSubmitting: false,
@@ -35,14 +40,19 @@ const getDefaultState = (): HomeDataState => ({
     trackingDialog: {
         open: false,
         activityType: null,
+        presetValues: undefined,
     },
 });
 
 export interface UseHomeDataResult extends HomeDataState {
     fetchActivityTypes: () => Promise<void>;
+    fetchActivityPresets: () => Promise<void>;
+    fetchRecentActivities: () => Promise<void>;
     openTrackingDialog: (activityType: ActivityTypeClient) => void;
+    openTrackingDialogWithPreset: (preset: ActivityPresetClient, activityType: ActivityTypeClient) => void;
     closeTrackingDialog: () => void;
     handleTrackActivity: (activityType: ActivityTypeClient, values: TrackedActivityValue[], notes?: string) => Promise<void>;
+    handleTrackPreset: (preset: ActivityPresetClient) => Promise<void>;
     clearSuccessMessage: () => void;
 }
 
@@ -119,16 +129,54 @@ export const useHomeData = (): UseHomeDataResult => {
         }
     }, [updateState, state.lastLoggedTimes]);
 
+    const fetchActivityPresets = useCallback(async () => {
+        try {
+            const response = await getActivityPresets();
+            updateState({ activityPresets: response.data.activityPresets });
+        } catch (err: unknown) {
+            console.error("Failed to fetch activity presets:", err);
+        }
+    }, [updateState]);
+
+    const fetchRecentActivities = useCallback(async () => {
+        try {
+            const now = new Date();
+            const threeHoursAgo = new Date(now.getTime() - (3 * 60 * 60 * 1000)); // 3 hours ago
+
+            const response = await getTrackedActivities({
+                startDate: threeHoursAgo.toISOString(),
+                endDate: now.toISOString(),
+                limit: 10
+            });
+
+            updateState({ recentlyLoggedActivities: response.data.trackedActivities });
+        } catch (err: unknown) {
+            console.error("Failed to fetch recent activities:", err);
+        }
+    }, [updateState]);
+
     useEffect(() => {
         fetchActivityTypes();
-    }, [fetchActivityTypes]);
+        fetchActivityPresets();
+        fetchRecentActivities();
+    }, [fetchActivityTypes, fetchActivityPresets, fetchRecentActivities]);
 
     const openTrackingDialog = useCallback((activityType: ActivityTypeClient) => {
-        updateState({ trackingDialog: { open: true, activityType } });
+        updateState({ trackingDialog: { open: true, activityType, presetValues: undefined } });
+    }, [updateState]);
+
+    const openTrackingDialogWithPreset = useCallback((preset: ActivityPresetClient, activityType: ActivityTypeClient) => {
+        updateState({
+            trackingDialog: {
+                open: true,
+                activityType: activityType,
+                presetValues: preset.presetFields
+            }
+        });
     }, [updateState]);
 
     const closeTrackingDialog = useCallback(() => {
-        updateState({ trackingDialog: { open: false, activityType: null } });
+        updateState({ trackingDialog: { open: false, activityType: null, presetValues: undefined } });
     }, [updateState]);
 
     const clearSuccessMessage = useCallback(() => {
@@ -167,15 +215,6 @@ export const useHomeData = (): UseHomeDataResult => {
                 [activityType._id]: timestamp
             };
 
-            // Create a copy of the activity to store in recently logged
-            const activityCopy = { ...activityType };
-
-            // Add to recently logged activities (keep most recent 5)
-            const updatedRecentlyLogged = [
-                { activityType: activityCopy, timestamp },
-                ...state.recentlyLoggedActivities
-            ].slice(0, 5);
-
             // Filter out the tracked activity from the list
             const updatedActivityTypes = state.activityTypes.filter(
                 activity => activity._id !== activityType._id
@@ -185,11 +224,13 @@ export const useHomeData = (): UseHomeDataResult => {
                 isSubmitting: false,
                 successMessage: `${activityType.name} logged successfully!`,
                 lastLoggedTimes: updatedLastLoggedTimes,
-                recentlyLoggedActivities: updatedRecentlyLogged,
                 activityTypes: updatedActivityTypes
             });
 
             closeTrackingDialog();
+
+            // Refresh recent activities to include the new one
+            fetchRecentActivities();
 
             // Auto-clear success message after 5 seconds
             setTimeout(() => {
@@ -204,14 +245,32 @@ export const useHomeData = (): UseHomeDataResult => {
             updateState({ error: message, isSubmitting: false });
             console.error("Failed to track activity:", err);
         }
-    }, [state.activityTypes, state.lastLoggedTimes, state.recentlyLoggedActivities, updateState, closeTrackingDialog, clearSuccessMessage]);
+    }, [state.activityTypes, state.lastLoggedTimes, updateState, closeTrackingDialog, clearSuccessMessage, fetchRecentActivities]);
+
+    const handleTrackPreset = useCallback(async (preset: ActivityPresetClient) => {
+        // Find the corresponding activity type
+        const allActivityTypes = await getActivityTypes();
+        const activityType = allActivityTypes.data?.activityTypes.find(at => at._id === preset.activityTypeId);
+
+        if (!activityType) {
+            updateState({ error: 'Activity type not found for this preset' });
+            return;
+        }
+
+        // Open the tracking dialog with preset values pre-filled
+        openTrackingDialogWithPreset(preset, activityType);
+    }, [openTrackingDialogWithPreset, updateState]);
 
     return {
         ...state,
         fetchActivityTypes,
+        fetchActivityPresets,
+        fetchRecentActivities,
         openTrackingDialog,
+        openTrackingDialogWithPreset,
         closeTrackingDialog,
         handleTrackActivity,
+        handleTrackPreset,
         clearSuccessMessage,
     };
 }; 
