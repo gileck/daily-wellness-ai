@@ -10,18 +10,24 @@ import {
 } from '@mui/material';
 import { useHomeData } from './hooks/useHomeData';
 import { TrackActivityDialog } from '@/client/components/TrackActivityDialog';
-import { ActivityTypesGrid, QuickPresetsSection, RecentActivitiesSection } from './components';
+import { TrackMetricDialog } from '@/client/components/TrackMetricDialog';
+import { ActivityTypesGrid, QuickPresetsSection, RecentActivitiesSection, WellnessMetricsSection } from './components';
 import { colors } from './utils/colorUtils';
 
 export const Home = () => {
   const {
     activityTypes,
+    wellnessMetrics,
     isLoading,
     error,
     trackingDialog,
+    metricDialog,
     openTrackingDialog,
     closeTrackingDialog,
+    openMetricDialog,
+    closeMetricDialog,
     handleTrackActivity,
+    handleTrackMetric,
     isSubmitting,
     successMessage,
     clearSuccessMessage,
@@ -119,6 +125,12 @@ export const Home = () => {
         onPresetClick={handleTrackPreset}
       />
 
+      {/* Wellness Metrics Section */}
+      <WellnessMetricsSection
+        wellnessMetrics={wellnessMetrics}
+        onMetricClick={openMetricDialog}
+      />
+
       {/* Recent Activities Section */}
       <RecentActivitiesSection
         recentlyLoggedActivities={recentlyLoggedActivities}
@@ -135,6 +147,18 @@ export const Home = () => {
           isSubmitting={isSubmitting}
           error={error}
           initialValues={trackingDialog.presetValues}
+        />
+      )}
+
+      {/* Track Metric Dialog */}
+      {metricDialog.metric && (
+        <TrackMetricDialog
+          open={metricDialog.open}
+          metric={metricDialog.metric}
+          onClose={closeMetricDialog}
+          onTrack={handleTrackMetric}
+          isSubmitting={isSubmitting}
+          error={error}
         />
       )}
 

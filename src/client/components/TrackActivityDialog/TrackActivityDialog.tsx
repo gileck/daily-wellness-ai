@@ -84,6 +84,7 @@ export const ActivityDialog: React.FC<ActivityDialogProps> = ({
     const [foodDialogOpen, setFoodDialogOpen] = useState(false);
     const [currentFoodField, setCurrentFoodField] = useState<string | null>(null);
     const [foodsCache, setFoodsCache] = useState<Map<string, FoodClient>>(new Map());
+    const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
     const isEditMode = !!existingActivity;
 
@@ -101,6 +102,7 @@ export const ActivityDialog: React.FC<ActivityDialogProps> = ({
             setNotes(existingActivity.notes || '');
             setTimestamp(new Date(existingActivity.timestamp));
             setLocalError(null);
+            setHasAttemptedSubmit(false);
         } else if (activityType) {
             // Initialize form for new activity
             const initialFormState: FormState = {};
@@ -137,11 +139,13 @@ export const ActivityDialog: React.FC<ActivityDialogProps> = ({
             setNotes('');
             setTimestamp(new Date());
             setLocalError(null);
+            setHasAttemptedSubmit(false);
         } else {
             setFormState({});
             setNotes('');
             setTimestamp(new Date());
             setLocalError(null);
+            setHasAttemptedSubmit(false);
         }
     }, [activityType, initialValues, isEditMode, existingActivity]);
 
@@ -197,10 +201,20 @@ export const ActivityDialog: React.FC<ActivityDialogProps> = ({
             processedValue = value === '' ? '' : Number(value);
         }
         setFormState(prev => ({ ...prev, [fieldName]: processedValue }));
+
+        // Clear local error when user starts typing to enable submit button
+        if (hasAttemptedSubmit && localError) {
+            setLocalError(null);
+        }
     };
 
     const handleNotesChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         setNotes(event.target.value);
+
+        // Clear local error when user starts typing to enable submit button
+        if (hasAttemptedSubmit && localError) {
+            setLocalError(null);
+        }
     };
 
     const handleFoodSelection = (fieldName: string) => {
@@ -211,6 +225,11 @@ export const ActivityDialog: React.FC<ActivityDialogProps> = ({
     const handleFoodSave = (selectedFoodPortions: FoodPortion[]) => {
         if (currentFoodField) {
             setFormState(prev => ({ ...prev, [currentFoodField]: selectedFoodPortions }));
+
+            // Clear local error when user makes changes to enable submit button
+            if (hasAttemptedSubmit && localError) {
+                setLocalError(null);
+            }
         }
         setFoodDialogOpen(false);
         setCurrentFoodField(null);
@@ -251,12 +270,13 @@ export const ActivityDialog: React.FC<ActivityDialogProps> = ({
 
     // Re-validate whenever form state changes to clear errors when fields become valid
     useEffect(() => {
-        if (activityType && Object.keys(formState).length > 0) {
+        if (hasAttemptedSubmit && activityType && Object.keys(formState).length > 0) {
             validateFields();
         }
-    }, [formState, validateFields, activityType]);
+    }, [formState, validateFields, activityType, hasAttemptedSubmit]);
 
     const handleSubmit = async () => {
+        setHasAttemptedSubmit(true);
         if (!activityType || !validateFields()) return;
 
         if (isEditMode && existingActivity && onEdit) {
@@ -303,7 +323,7 @@ export const ActivityDialog: React.FC<ActivityDialogProps> = ({
             margin: 'dense' as const,
             value: formState[field.name] || (field.fieldType === 'Boolean' ? false : ''),
             onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => handleChange(field.name, e.target.value, field.fieldType),
-            error: !!localError && localError.includes(field.name),
+            error: hasAttemptedSubmit && !!localError && localError.includes(field.name),
             sx: {
                 '& .MuiOutlinedInput-root': {
                     borderRadius: '8px',
@@ -410,7 +430,7 @@ export const ActivityDialog: React.FC<ActivityDialogProps> = ({
                 );
             case 'Options':
                 return (
-                    <FormControl key={field.name} fullWidth margin="dense" error={!!localError && localError.includes(field.name)}>
+                    <FormControl key={field.name} fullWidth margin="dense" error={hasAttemptedSubmit && !!localError && localError.includes(field.name)}>
                         <InputLabel id={`${field.name}-label`}>
                             {field.name + (field.required ? ' *' : '')}
                         </InputLabel>
@@ -572,7 +592,7 @@ export const ActivityDialog: React.FC<ActivityDialogProps> = ({
                             />
                         </Grid>
                     </Grid>
-                    {(localError || error) && (
+                    {(hasAttemptedSubmit && (localError || error)) && (
                         <Box
                             sx={{
                                 mt: 2,
@@ -618,7 +638,7 @@ export const ActivityDialog: React.FC<ActivityDialogProps> = ({
                     <Button
                         onClick={handleSubmit}
                         variant="contained"
-                        disabled={isSubmitting || !!localError}
+                        disabled={isSubmitting || (hasAttemptedSubmit && !!localError)}
                         sx={{
                             bgcolor: activityType?.color || '#007AFF',
                             textTransform: 'none',

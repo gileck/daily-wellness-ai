@@ -27,10 +27,12 @@ import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
 import { FoodClient, SearchFoodsRequest } from '@/apis/foods/types';
 import { searchFoods } from '@/apis/foods/client';
 import { formatFoodWithEmoji, getFoodEmoji } from '@/client/utils/foodEmojiUtils';
 import { FoodPortion, CommonServing, PREDEFINED_PORTIONS } from './types';
+import { CustomFoodDialog } from './CustomFoodDialog';
 
 interface FoodSelectionDialogProps {
     open: boolean;
@@ -52,12 +54,11 @@ export const FoodSelectionDialog: React.FC<FoodSelectionDialogProps> = ({
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [editingPortionIndex, setEditingPortionIndex] = useState<number | null>(null);
+    const [customFoodDialogOpen, setCustomFoodDialogOpen] = useState(false);
 
     const selectedFoodIds = useMemo(() => {
         return new Set(selectedFoodPortions.map(portion => portion.foodId));
     }, [selectedFoodPortions]);
-
-
 
     const highlightSearchTerm = (text: string, searchTerm: string) => {
         if (!searchTerm || !text) return text;
@@ -181,6 +182,11 @@ export const FoodSelectionDialog: React.FC<FoodSelectionDialogProps> = ({
         onClose();
     };
 
+    const handleCustomFoodCreated = () => {
+        // Reload foods to include the newly created custom food
+        loadFoods(searchQuery);
+    };
+
     const getAvailableServings = (food: FoodClient): CommonServing[] => {
         const combined = [...food.commonServings];
         // Add predefined portions that aren't already present
@@ -228,27 +234,69 @@ export const FoodSelectionDialog: React.FC<FoodSelectionDialogProps> = ({
         };
 
         return (
-            <Box sx={{ p: 2, border: '1px solid #E0E0E0', borderRadius: 2, bgcolor: '#F9F9F9' }}>
-                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
-                    Edit Portion - {formatFoodWithEmoji(food.displayName)}
-                </Typography>
+            <Box sx={{
+                p: 2,
+                border: '1px solid #E3F2FD',
+                borderRadius: 2,
+                bgcolor: '#FAFBFF',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+            }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#1976D2', fontSize: { xs: '14px', sm: '14px' } }}>
+                        Edit Portion - {formatFoodWithEmoji(food.displayName)}
+                    </Typography>
+                    <Typography variant="caption" sx={{
+                        bgcolor: '#E3F2FD',
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: 1,
+                        color: '#1976D2',
+                        fontWeight: 500,
+                        fontSize: { xs: '11px', sm: '12px' }
+                    }}>
+                        Total: {gramsEquivalent.toFixed(1)}g
+                    </Typography>
+                </Box>
 
-                <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+                <Box sx={{
+                    display: 'flex',
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    gap: { xs: 2, sm: 1.5 },
+                    mb: 2,
+                    alignItems: { xs: 'stretch', sm: 'flex-end' }
+                }}>
                     <TextField
                         label="Amount"
                         type="number"
                         value={amount}
                         onChange={(e) => setAmount(Number(e.target.value))}
                         inputProps={{ min: 0.1, step: 0.1 }}
-                        sx={{ minWidth: 100 }}
+                        size="small"
+                        sx={{
+                            width: { xs: '100%', sm: 80 },
+                            '& .MuiOutlinedInput-root': {
+                                borderRadius: 1.5,
+                                height: { xs: 48, sm: 40 }
+                            },
+                            '& .MuiInputLabel-root': {
+                                fontSize: { xs: '16px', sm: '14px' }
+                            }
+                        }}
                     />
 
-                    <FormControl sx={{ minWidth: 120 }}>
-                        <InputLabel>Unit</InputLabel>
+                    <FormControl size="small" sx={{ width: { xs: '100%', sm: 90 } }}>
+                        <InputLabel sx={{ fontSize: { xs: '16px', sm: '14px' } }}>Unit</InputLabel>
                         <Select
                             value={servingType}
                             onChange={(e) => setServingType(e.target.value as 'grams' | 'common_serving')}
                             label="Unit"
+                            sx={{
+                                borderRadius: 1.5,
+                                height: { xs: 48, sm: 40 },
+                                '& .MuiSelect-select': {
+                                    fontSize: { xs: '16px', sm: '14px' }
+                                }
+                            }}
                         >
                             <MenuItem value="grams">Grams</MenuItem>
                             <MenuItem value="common_serving">Serving</MenuItem>
@@ -256,12 +304,19 @@ export const FoodSelectionDialog: React.FC<FoodSelectionDialogProps> = ({
                     </FormControl>
 
                     {servingType === 'common_serving' && (
-                        <FormControl sx={{ minWidth: 120 }}>
-                            <InputLabel>Serving Size</InputLabel>
+                        <FormControl size="small" sx={{ width: { xs: '100%', sm: 140 } }}>
+                            <InputLabel sx={{ fontSize: { xs: '16px', sm: '14px' } }}>Serving Size</InputLabel>
                             <Select
                                 value={servingName}
                                 onChange={(e) => setServingName(e.target.value)}
                                 label="Serving Size"
+                                sx={{
+                                    borderRadius: 1.5,
+                                    height: { xs: 48, sm: 40 },
+                                    '& .MuiSelect-select': {
+                                        fontSize: { xs: '16px', sm: '14px' }
+                                    }
+                                }}
                             >
                                 {availableServings.map((serving) => (
                                     <MenuItem key={serving.name} value={serving.name}>
@@ -271,196 +326,268 @@ export const FoodSelectionDialog: React.FC<FoodSelectionDialogProps> = ({
                             </Select>
                         </FormControl>
                     )}
-                </Box>
 
-                <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-                    Total: {gramsEquivalent.toFixed(1)}g
-                </Typography>
-
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button onClick={onCancel} size="small">Cancel</Button>
-                    <Button onClick={handleSave} variant="contained" size="small">Save</Button>
+                    <Box sx={{
+                        display: 'flex',
+                        gap: 1,
+                        ml: { xs: 0, sm: 'auto' },
+                        mt: { xs: 1, sm: 0 },
+                        width: { xs: '100%', sm: 'auto' }
+                    }}>
+                        <Button
+                            onClick={onCancel}
+                            size="small"
+                            variant="outlined"
+                            sx={{
+                                textTransform: 'none',
+                                borderRadius: 1.5,
+                                minWidth: { xs: 'auto', sm: 60 },
+                                flex: { xs: 1, sm: 'none' },
+                                height: { xs: 44, sm: 32 },
+                                fontSize: { xs: '16px', sm: '14px' },
+                                color: '#666',
+                                borderColor: '#DDD',
+                                '&:hover': {
+                                    borderColor: '#BBB',
+                                    bgcolor: '#F5F5F5'
+                                }
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleSave}
+                            variant="contained"
+                            size="small"
+                            sx={{
+                                textTransform: 'none',
+                                borderRadius: 1.5,
+                                minWidth: { xs: 'auto', sm: 60 },
+                                flex: { xs: 1, sm: 'none' },
+                                height: { xs: 44, sm: 32 },
+                                fontSize: { xs: '16px', sm: '14px' },
+                                bgcolor: '#1976D2',
+                                '&:hover': {
+                                    bgcolor: '#1565C0'
+                                }
+                            }}
+                        >
+                            Save
+                        </Button>
+                    </Box>
                 </Box>
             </Box>
         );
     };
 
     return (
-        <Dialog
-            open={open}
-            onClose={handleClose}
-            maxWidth="md"
-            fullWidth
-            PaperProps={{
-                sx: { borderRadius: 3, height: '80vh' }
-            }}
-        >
-            <DialogTitle sx={{ fontWeight: 600, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                Select Foods
-                <IconButton onClick={handleClose} sx={{ mr: -1 }}>
-                    <CloseIcon />
-                </IconButton>
-            </DialogTitle>
+        <>
+            <Dialog
+                open={open}
+                onClose={handleClose}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{
+                    sx: { borderRadius: 3, height: '80vh' }
+                }}
+            >
+                <DialogTitle sx={{ fontWeight: 600, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    Select Foods
+                    <IconButton onClick={handleClose} sx={{ mr: -1 }}>
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
 
-            <DialogContent sx={{ pt: '10px !important', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <TextField
-                    fullWidth
-                    placeholder="Search foods..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    InputProps={{
-                        startAdornment: (
-                            <InputAdornment position="start">
-                                <SearchIcon />
-                            </InputAdornment>
-                        ),
-                    }}
-                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-                />
+                <DialogContent sx={{ pt: '10px !important', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <TextField
+                        fullWidth
+                        placeholder="Search foods..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        InputProps={{
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    <SearchIcon />
+                                </InputAdornment>
+                            ),
+                        }}
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                    />
 
-                {selectedFoodPortions.length > 0 && (
-                    <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 500, mb: 1 }}>
-                            Selected Foods ({selectedFoodPortions.length})
-                        </Typography>
-                        <Box sx={{
-                            border: '1px solid #E0E0E0',
-                            borderRadius: 2,
-                            maxHeight: '300px',
-                            overflow: 'auto'
-                        }}>
-                            <List sx={{ py: 0 }}>
-                                {selectedFoodPortions.map((portion, index) => {
-                                    const food = allKnownFoods.find(f => f.id === portion.foodId);
-                                    if (!food) return null;
+                    {selectedFoodPortions.length > 0 && (
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 500, mb: 1 }}>
+                                Selected Foods ({selectedFoodPortions.length})
+                            </Typography>
+                            <Box sx={{
+                                border: '1px solid #E0E0E0',
+                                borderRadius: 2,
+                                maxHeight: '300px',
+                                overflow: 'auto'
+                            }}>
+                                <List sx={{ py: 0 }}>
+                                    {selectedFoodPortions.map((portion, index) => {
+                                        const food = allKnownFoods.find(f => f.id === portion.foodId);
+                                        if (!food) return null;
 
-                                    if (editingPortionIndex === index) {
+                                        if (editingPortionIndex === index) {
+                                            return (
+                                                <ListItem key={portion.foodId} sx={{ p: 0 }}>
+                                                    <PortionEditor
+                                                        portion={portion}
+                                                        food={food}
+                                                        onSave={(updatedPortion) => handleUpdatePortion(index, updatedPortion)}
+                                                        onCancel={() => setEditingPortionIndex(null)}
+                                                    />
+                                                </ListItem>
+                                            );
+                                        }
+
                                         return (
-                                            <ListItem key={portion.foodId} sx={{ p: 0 }}>
-                                                <PortionEditor
-                                                    portion={portion}
-                                                    food={food}
-                                                    onSave={(updatedPortion) => handleUpdatePortion(index, updatedPortion)}
-                                                    onCancel={() => setEditingPortionIndex(null)}
-                                                />
-                                            </ListItem>
+                                            <React.Fragment key={portion.foodId}>
+                                                <ListItem sx={{ py: 1, px: 2 }}>
+                                                    <ListItemText
+                                                        primary={formatFoodWithEmoji(food.displayName)}
+                                                        secondary={
+                                                            <Typography variant="caption" color="text.secondary">
+                                                                {portion.amount} {portion.servingType === 'grams' ? 'g' : portion.servingName}
+                                                                ({portion.gramsEquivalent.toFixed(1)}g total)
+                                                            </Typography>
+                                                        }
+                                                    />
+                                                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => setEditingPortionIndex(index)}
+                                                            sx={{ color: 'primary.main' }}
+                                                        >
+                                                            <EditIcon fontSize="small" />
+                                                        </IconButton>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleRemoveSelected(portion.foodId)}
+                                                            sx={{ color: 'error.main' }}
+                                                        >
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Box>
+                                                </ListItem>
+                                                {index < selectedFoodPortions.length - 1 && <Divider />}
+                                            </React.Fragment>
                                         );
-                                    }
-
-                                    return (
-                                        <React.Fragment key={portion.foodId}>
-                                            <ListItem sx={{ py: 1, px: 2 }}>
-                                                <ListItemText
-                                                    primary={formatFoodWithEmoji(food.displayName)}
-                                                    secondary={
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            {portion.amount} {portion.servingType === 'grams' ? 'g' : portion.servingName}
-                                                            ({portion.gramsEquivalent.toFixed(1)}g total)
-                                                        </Typography>
-                                                    }
-                                                />
-                                                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => setEditingPortionIndex(index)}
-                                                        sx={{ color: 'primary.main' }}
-                                                    >
-                                                        <EditIcon fontSize="small" />
-                                                    </IconButton>
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => handleRemoveSelected(portion.foodId)}
-                                                        sx={{ color: 'error.main' }}
-                                                    >
-                                                        <DeleteIcon fontSize="small" />
-                                                    </IconButton>
-                                                </Box>
-                                            </ListItem>
-                                            {index < selectedFoodPortions.length - 1 && <Divider />}
-                                        </React.Fragment>
-                                    );
-                                })}
-                            </List>
+                                    })}
+                                </List>
+                            </Box>
                         </Box>
-                    </Box>
-                )}
-
-                {error && (
-                    <Alert severity="error" sx={{ borderRadius: 2 }}>
-                        {error}
-                    </Alert>
-                )}
-
-                <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 500, mb: 1 }}>
-                        Available Foods
-                    </Typography>
-
-                    {isLoading ? (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
-                            <CircularProgress />
-                        </Box>
-                    ) : (
-                        <List sx={{ height: '100%', overflow: 'auto' }}>
-                            {foods.map((food) => (
-                                <ListItem key={food.id} disablePadding>
-                                    <ListItemButton onClick={() => handleToggleFood(food.id)}>
-                                        <Checkbox
-                                            checked={selectedFoodIds.has(food.id)}
-                                            tabIndex={-1}
-                                            disableRipple
-                                        />
-                                        <ListItemText
-                                            primary={
-                                                <>
-                                                    {getFoodEmoji(food.displayName) && (
-                                                        <span style={{ marginRight: 4 }}>{getFoodEmoji(food.displayName)}</span>
-                                                    )}
-                                                    {highlightSearchTerm(food.name, searchQuery)}
-                                                </>
-                                            }
-                                            secondary={
-                                                <Box>
-                                                    <Typography variant="caption" color="text.secondary">
-                                                        {food.category}
-                                                    </Typography>
-                                                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                                                        {food.nutritionPer100g.calories} cal/100g
-                                                    </Typography>
-                                                </Box>
-                                            }
-                                        />
-                                    </ListItemButton>
-                                </ListItem>
-                            ))}
-                            {foods.length === 0 && !isLoading && (
-                                <Box sx={{ textAlign: 'center', py: 4 }}>
-                                    <Typography color="text.secondary">
-                                        {searchQuery ? 'No foods found for your search' : 'No foods available'}
-                                    </Typography>
-                                </Box>
-                            )}
-                        </List>
                     )}
-                </Box>
-            </DialogContent>
 
-            <DialogActions sx={{ p: 3, pt: 1, gap: 2 }}>
-                <Button
-                    onClick={handleClose}
-                    sx={{ textTransform: 'none' }}
-                >
-                    Cancel
-                </Button>
-                <Button
-                    onClick={handleSave}
-                    variant="contained"
-                    disabled={selectedFoodPortions.length === 0}
-                    sx={{ textTransform: 'none' }}
-                >
-                    Save Selection ({selectedFoodPortions.length})
-                </Button>
-            </DialogActions>
-        </Dialog>
+                    {error && (
+                        <Alert severity="error" sx={{ borderRadius: 2 }}>
+                            {error}
+                        </Alert>
+                    )}
+
+                    <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>
+                                Available Foods
+                            </Typography>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<AddIcon />}
+                                onClick={() => setCustomFoodDialogOpen(true)}
+                                sx={{
+                                    textTransform: 'none',
+                                    borderRadius: 1.5,
+                                    fontSize: '12px',
+                                    py: 0.5,
+                                    px: 1.5,
+                                    minWidth: 'auto',
+                                    borderColor: '#1976D2',
+                                    color: '#1976D2',
+                                    '&:hover': {
+                                        borderColor: '#1565C0',
+                                        bgcolor: '#F3F8FF'
+                                    }
+                                }}
+                            >
+                                Add Custom Food
+                            </Button>
+                        </Box>
+
+                        {isLoading ? (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+                                <CircularProgress />
+                            </Box>
+                        ) : (
+                            <List sx={{ height: '100%', overflow: 'auto' }}>
+                                {foods.map((food) => (
+                                    <ListItem key={food.id} disablePadding>
+                                        <ListItemButton onClick={() => handleToggleFood(food.id)}>
+                                            <Checkbox
+                                                checked={selectedFoodIds.has(food.id)}
+                                                tabIndex={-1}
+                                                disableRipple
+                                            />
+                                            <ListItemText
+                                                primary={
+                                                    <>
+                                                        {getFoodEmoji(food.displayName) && (
+                                                            <span style={{ marginRight: 4 }}>{getFoodEmoji(food.displayName)}</span>
+                                                        )}
+                                                        {highlightSearchTerm(food.name, searchQuery)}
+                                                    </>
+                                                }
+                                                secondary={
+                                                    <Box>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {food.category}
+                                                        </Typography>
+                                                        <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                                            {food.nutritionPer100g.calories} cal/100g
+                                                        </Typography>
+                                                    </Box>
+                                                }
+                                            />
+                                        </ListItemButton>
+                                    </ListItem>
+                                ))}
+                                {foods.length === 0 && !isLoading && (
+                                    <Box sx={{ textAlign: 'center', py: 4 }}>
+                                        <Typography color="text.secondary">
+                                            {searchQuery ? 'No foods found for your search' : 'No foods available'}
+                                        </Typography>
+                                    </Box>
+                                )}
+                            </List>
+                        )}
+                    </Box>
+                </DialogContent>
+
+                <DialogActions sx={{ p: 3, pt: 1, gap: 2 }}>
+                    <Button
+                        onClick={handleClose}
+                        sx={{ textTransform: 'none' }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleSave}
+                        variant="contained"
+                        disabled={selectedFoodPortions.length === 0}
+                        sx={{ textTransform: 'none' }}
+                    >
+                        Save Selection ({selectedFoodPortions.length})
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <CustomFoodDialog
+                open={customFoodDialogOpen}
+                onClose={() => setCustomFoodDialogOpen(false)}
+                onFoodCreated={handleCustomFoodCreated}
+            />
+        </>
     );
 }; 

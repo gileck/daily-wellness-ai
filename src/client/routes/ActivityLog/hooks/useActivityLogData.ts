@@ -10,11 +10,21 @@ import {
     GetTrackedActivitiesParams,
     UpdateTrackedActivityPayload
 } from '@/apis/trackedActivities/types';
+import {
+    getWellnessMetricRecords,
+    updateWellnessMetricRecord,
+    deleteWellnessMetricRecord
+} from '@/apis/wellnessMetrics/client';
+import {
+    WellnessMetricRecord,
+    UpdateWellnessMetricRecordPayload
+} from '@/apis/wellnessMetrics/types';
 
 const PAGE_SIZE = 50;
 
 export interface ActivityLogDataState {
     trackedActivities: TrackedActivity[];
+    wellnessMetricRecords: WellnessMetricRecord[];
     isLoading: boolean;
     error: string | null;
     totalActivities: number;
@@ -28,6 +38,7 @@ export interface ActivityLogDataState {
 
 const getDefaultState = (): ActivityLogDataState => ({
     trackedActivities: [],
+    wellnessMetricRecords: [],
     isLoading: false,
     error: null,
     totalActivities: 0,
@@ -44,6 +55,8 @@ export interface UseActivityLogDataResult extends ActivityLogDataState {
     updateActivity: (activityId: string, updates: UpdateTrackedActivityPayload['updates']) => Promise<boolean>;
     removeActivity: (activityId: string) => Promise<boolean>;
     duplicateActivity: (activityId: string, timestamp?: Date) => Promise<boolean>;
+    updateMetricRecord: (recordId: string, updates: UpdateWellnessMetricRecordPayload['updates']) => Promise<boolean>;
+    removeMetricRecord: (recordId: string) => Promise<boolean>;
 }
 
 export const useActivityLogData = (): UseActivityLogDataResult => {
@@ -62,11 +75,16 @@ export const useActivityLogData = (): UseActivityLogDataResult => {
                 offset: 0, // Always start from the beginning to get latest activities
             };
 
-            const response = await getTrackedActivities(apiParams);
+            // Fetch both activities and wellness metric records
+            const [activitiesResponse, metricsResponse] = await Promise.all([
+                getTrackedActivities(apiParams),
+                getWellnessMetricRecords({ limit: PAGE_SIZE })
+            ]);
 
             updateState({
-                trackedActivities: response.data.trackedActivities,
-                totalActivities: response.data.total,
+                trackedActivities: activitiesResponse.data.trackedActivities,
+                wellnessMetricRecords: metricsResponse.data.records,
+                totalActivities: activitiesResponse.data.total,
                 isLoading: false,
             });
         } catch (err: unknown) {
@@ -152,6 +170,54 @@ export const useActivityLogData = (): UseActivityLogDataResult => {
         }
     }, [state.trackedActivities, state.totalActivities, updateState]);
 
+    const updateMetricRecord = useCallback(async (recordId: string, updates: UpdateWellnessMetricRecordPayload['updates']) => {
+        updateState({ isUpdating: true, updateError: null });
+        try {
+            await updateWellnessMetricRecord({ recordId, updates });
+
+            // Update local state with the updated record
+            updateState({
+                wellnessMetricRecords: state.wellnessMetricRecords.map(record =>
+                    record._id === recordId ? { ...record, ...updates } : record
+                ),
+                isUpdating: false
+            });
+
+            return true;
+        } catch (err: unknown) {
+            let message = 'An unknown error occurred while updating the metric record.';
+            if (err instanceof Error) {
+                message = err.message;
+            }
+            updateState({ updateError: message, isUpdating: false });
+            console.error("Failed to update metric record:", err);
+            return false;
+        }
+    }, [state.wellnessMetricRecords, updateState]);
+
+    const removeMetricRecord = useCallback(async (recordId: string) => {
+        updateState({ isDeleting: true, deleteError: null });
+        try {
+            await deleteWellnessMetricRecord({ recordId });
+
+            // Remove from local state
+            updateState({
+                wellnessMetricRecords: state.wellnessMetricRecords.filter(record => record._id !== recordId),
+                isDeleting: false
+            });
+
+            return true;
+        } catch (err: unknown) {
+            let message = 'An unknown error occurred while deleting the metric record.';
+            if (err instanceof Error) {
+                message = err.message;
+            }
+            updateState({ deleteError: message, isDeleting: false });
+            console.error("Failed to delete metric record:", err);
+            return false;
+        }
+    }, [state.wellnessMetricRecords, updateState]);
+
     useEffect(() => {
         fetchActivities();
     }, [fetchActivities]);
@@ -162,5 +228,7 @@ export const useActivityLogData = (): UseActivityLogDataResult => {
         updateActivity,
         removeActivity,
         duplicateActivity,
+        updateMetricRecord,
+        removeMetricRecord,
     };
 }; 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Typography, Box, CircularProgress, Alert, List, ListItem, ListItemText, Divider, Button, Card, CardContent, Snackbar, Checkbox, ListItemIcon, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Chip, Avatar } from '@mui/material';
+import { Typography, Box, CircularProgress, Alert, List, ListItem, ListItemText, Divider, Button, Card, CardContent, Snackbar, Checkbox, ListItemIcon, Chip, Avatar } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -8,18 +8,27 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import { useActivityLogData } from './hooks/useActivityLogData';
 import { format, isAfter, isBefore, startOfDay, endOfDay } from 'date-fns';
 import { TrackedActivity, TrackedActivityValue, UpdateTrackedActivityPayload } from '@/apis/trackedActivities/types';
+import { WellnessMetricRecord } from '@/apis/wellnessMetrics/types';
 import { ActivityTypeClient } from '@/apis/activity/types';
 import { getActivityTypes } from '@/apis/activity/client';
 import { ActivityActions } from './components/ActivityActions';
 import { ActivityDialog } from '@/client/components/TrackActivityDialog';
 import { ActivityFilterDialog } from './components/ActivityFilterDialog';
+import { MetricRecordItem } from './components/MetricRecordItem';
+import { EditMetricDialog } from '@/client/components/EditMetricDialog';
 import { getActivityIcon } from '@/client/utils/activityIcons';
 import { formatFieldValue } from '@/client/utils/foodDisplayUtils';
+
+// Combined type for timeline items
+type TimelineItem = {
+    type: 'activity' | 'metric';
+    timestamp: Date;
+    data: TrackedActivity | WellnessMetricRecord;
+};
 
 const getActivityIconForTrackedActivity = (activity: TrackedActivity): React.ReactElement | null => {
     // Use the icon from the activity type if available
     if (activity.activityType?.icon) {
-        console.log(`Using database icon "${activity.activityType.icon}" for activity "${activity.activityName}"`);
         return getActivityIcon(activity.activityType.icon);
     }
 
@@ -31,7 +40,6 @@ const getActivityIconForTrackedActivity = (activity: TrackedActivity): React.Rea
 const getActivityColor = (activity: TrackedActivity): string => {
     // Use the color from the activity type if available
     if (activity.activityType?.color) {
-        console.log(`Using database color "${activity.activityType.color}" for activity "${activity.activityName}"`);
         return activity.activityType.color;
     }
     // Default color
@@ -40,14 +48,13 @@ const getActivityColor = (activity: TrackedActivity): string => {
 
 export const ActivityLogPage = () => {
     const [selectedActivity, setSelectedActivity] = useState<TrackedActivity | null>(null);
+    const [selectedMetricRecord, setSelectedMetricRecord] = useState<WellnessMetricRecord | null>(null);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [isEditMetricDialogOpen, setIsEditMetricDialogOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState<string>('');
     const [isSnackbarOpen, setIsSnackbarOpen] = useState(false);
     const [selectedActivities, setSelectedActivities] = useState<Set<string>>(new Set());
     const [isEditMode, setIsEditMode] = useState(false);
-    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-    const [deleteAction, setDeleteAction] = useState<(() => Promise<void>) | null>(null);
-    const [deleteMessage, setDeleteMessage] = useState<string>('');
     const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
     const [activityTypes, setActivityTypes] = useState<ActivityTypeClient[]>([]);
     const [filters, setFilters] = useState<{
@@ -62,12 +69,15 @@ export const ActivityLogPage = () => {
 
     const {
         trackedActivities,
+        wellnessMetricRecords,
         isLoading,
         error,
         fetchActivities,
         updateActivity,
         removeActivity,
-        duplicateActivity
+        duplicateActivity,
+        updateMetricRecord,
+        removeMetricRecord
     } = useActivityLogData();
 
     // Fetch activity types
@@ -87,36 +97,57 @@ export const ActivityLogPage = () => {
         return Array.from(new Set(trackedActivities.map(activity => activity.activityName))).sort();
     }, [trackedActivities]);
 
-    const filteredActivities = useMemo(() => {
-        console.log(`Total tracked activities received: ${trackedActivities.length}`);
+    // Create combined timeline of activities and metrics
+    const timelineItems = useMemo(() => {
+        const items: TimelineItem[] = [];
 
-        // Debug: Log the first few activities to see ActivityType data
-        trackedActivities.slice(0, 3).forEach((activity, index) => {
-            console.log(`Activity ${index + 1}: "${activity.activityName}"`, {
-                activityType: activity.activityType,
-                hasIcon: !!activity.activityType?.icon,
-                hasColor: !!activity.activityType?.color
+        // Add activities
+        trackedActivities.forEach(activity => {
+            items.push({
+                type: 'activity',
+                timestamp: new Date(activity.timestamp),
+                data: activity
             });
         });
 
-        return trackedActivities.filter(activity => {
-            // Filter by activity name
-            if (filters.selectedActivityNames.length > 0 && !filters.selectedActivityNames.includes(activity.activityName)) {
-                return false;
+        // Add wellness metric records
+        wellnessMetricRecords.forEach(record => {
+            items.push({
+                type: 'metric',
+                timestamp: new Date(record.timestamp),
+                data: record
+            });
+        });
+
+        // Sort by timestamp (newest first)
+        return items.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    }, [trackedActivities, wellnessMetricRecords]);
+
+    const filteredTimelineItems = useMemo(() => {
+        console.log(`Total timeline items: ${timelineItems.length}`);
+
+        return timelineItems.filter(item => {
+            // For activities, apply existing filters
+            if (item.type === 'activity') {
+                const activity = item.data as TrackedActivity;
+
+                // Filter by activity name
+                if (filters.selectedActivityNames.length > 0 && !filters.selectedActivityNames.includes(activity.activityName)) {
+                    return false;
+                }
             }
 
-            // Filter by date range
-            const activityDate = new Date(activity.timestamp);
-            if (filters.dateFrom && isBefore(activityDate, startOfDay(filters.dateFrom))) {
+            // Filter by date range (applies to both activities and metrics)
+            if (filters.dateFrom && isBefore(item.timestamp, startOfDay(filters.dateFrom))) {
                 return false;
             }
-            if (filters.dateTo && isAfter(activityDate, endOfDay(filters.dateTo))) {
+            if (filters.dateTo && isAfter(item.timestamp, endOfDay(filters.dateTo))) {
                 return false;
             }
 
             return true;
         });
-    }, [trackedActivities, filters]);
+    }, [timelineItems, filters]);
 
     const handleEditClick = (activity: TrackedActivity) => {
         setSelectedActivity(activity);
@@ -138,16 +169,12 @@ export const ActivityLogPage = () => {
     };
 
     const handleDeleteActivity = async (activityId: string) => {
-        setDeleteMessage('Are you sure you want to delete this activity? This action cannot be undone.');
-        setDeleteAction(() => async () => {
-            const success = await removeActivity(activityId);
-            if (success) {
-                setSnackbarMessage('Activity deleted successfully');
-                setIsSnackbarOpen(true);
-            }
-        });
-        setIsDeleteConfirmOpen(true);
-        return true;
+        const success = await removeActivity(activityId);
+        if (success) {
+            setSnackbarMessage('Activity deleted successfully');
+            setIsSnackbarOpen(true);
+        }
+        return success;
     };
 
     const handleDuplicateActivity = async (activityId: string) => {
@@ -176,48 +203,30 @@ export const ActivityLogPage = () => {
     };
 
     const handleSelectAll = () => {
-        if (selectedActivities.size === filteredActivities.length) {
+        const activityItems = filteredTimelineItems.filter(item => item.type === 'activity');
+        if (selectedActivities.size === activityItems.length) {
             setSelectedActivities(new Set());
         } else {
-            setSelectedActivities(new Set(filteredActivities.map(activity => activity._id)));
+            setSelectedActivities(new Set(activityItems.map(item => item.data._id)));
         }
     };
 
     const handleBulkDelete = async () => {
         if (selectedActivities.size === 0) return;
 
-        setDeleteMessage(`Are you sure you want to delete ${selectedActivities.size} ${selectedActivities.size === 1 ? 'activity' : 'activities'}? This action cannot be undone.`);
-        setDeleteAction(() => async () => {
-            let successCount = 0;
-            for (const activityId of selectedActivities) {
-                const success = await removeActivity(activityId);
-                if (success) {
-                    successCount++;
-                }
+        let successCount = 0;
+        for (const activityId of selectedActivities) {
+            const success = await removeActivity(activityId);
+            if (success) {
+                successCount++;
             }
-
-            if (successCount > 0) {
-                setSnackbarMessage(`${successCount} ${successCount === 1 ? 'activity' : 'activities'} deleted successfully`);
-                setIsSnackbarOpen(true);
-                setSelectedActivities(new Set());
-            }
-        });
-        setIsDeleteConfirmOpen(true);
-    };
-
-    const handleConfirmDelete = async () => {
-        if (deleteAction) {
-            await deleteAction();
         }
-        setIsDeleteConfirmOpen(false);
-        setDeleteAction(null);
-        setDeleteMessage('');
-    };
 
-    const handleCancelDelete = () => {
-        setIsDeleteConfirmOpen(false);
-        setDeleteAction(null);
-        setDeleteMessage('');
+        if (successCount > 0) {
+            setSnackbarMessage(`${successCount} ${successCount === 1 ? 'activity' : 'activities'} deleted successfully`);
+            setIsSnackbarOpen(true);
+            setSelectedActivities(new Set());
+        }
     };
 
     const handleToggleEditMode = () => {
@@ -241,13 +250,42 @@ export const ActivityLogPage = () => {
     };
 
     const hasActiveFilters = filters.selectedActivityNames.length > 0 || filters.dateFrom || filters.dateTo;
+    const activityItemsCount = filteredTimelineItems.filter(item => item.type === 'activity').length;
 
     // Find the activity type for the selected activity
     const selectedActivityType = selectedActivity && activityTypes.find(
         type => type.name === selectedActivity.activityName
     );
 
-    if (isLoading && trackedActivities.length === 0) {
+    const handleEditMetricClick = (record: WellnessMetricRecord) => {
+        setSelectedMetricRecord(record);
+        setIsEditMetricDialogOpen(true);
+    };
+
+    const handleEditMetricClose = () => {
+        setIsEditMetricDialogOpen(false);
+        setSelectedMetricRecord(null);
+    };
+
+    const handleUpdateMetricRecord = async (recordId: string, updates: { value?: number | string; notes?: string; timestamp?: Date }) => {
+        const success = await updateMetricRecord(recordId, updates);
+        if (success) {
+            setSnackbarMessage('Metric record updated successfully');
+            setIsSnackbarOpen(true);
+        }
+        return success;
+    };
+
+    const handleDeleteMetricRecord = async (recordId: string) => {
+        const success = await removeMetricRecord(recordId);
+        if (success) {
+            setSnackbarMessage('Metric record deleted successfully');
+            setIsSnackbarOpen(true);
+        }
+        return success;
+    };
+
+    if (isLoading && trackedActivities.length === 0 && wellnessMetricRecords.length === 0) {
         return (
             <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
                 <CircularProgress sx={{ color: '#007AFF' }} />
@@ -342,11 +380,11 @@ export const ActivityLogPage = () => {
                         })
                     }}
                 >
-                    Filter {hasActiveFilters && `(${filteredActivities.length})`}
+                    Filter {hasActiveFilters && `(${filteredTimelineItems.length})`}
                 </Button>
             </Box>
 
-            {isEditMode && filteredActivities.length > 0 && (
+            {isEditMode && activityItemsCount > 0 && (
                 <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
                     <Button
                         onClick={handleSelectAll}
@@ -358,7 +396,7 @@ export const ActivityLogPage = () => {
                             fontWeight: 500,
                         }}
                     >
-                        {selectedActivities.size === filteredActivities.length ? 'Deselect All' : 'Select All'}
+                        {selectedActivities.size === activityItemsCount ? 'Deselect All' : 'Select All'}
                     </Button>
 
                     {selectedActivities.size > 0 && (
@@ -393,7 +431,7 @@ export const ActivityLogPage = () => {
                 </Alert>
             )}
 
-            {filteredActivities.length === 0 && !isLoading && !error && (
+            {filteredTimelineItems.length === 0 && !isLoading && !error && (
                 <Alert
                     severity="info"
                     sx={{
@@ -402,7 +440,7 @@ export const ActivityLogPage = () => {
                         '& .MuiAlert-icon': { color: '#5AC8FA' }
                     }}
                 >
-                    {hasActiveFilters ? 'No activities match the current filters.' : 'No activities found.'}
+                    {hasActiveFilters ? 'No activities or metrics match the current filters.' : 'No activities or metrics found.'}
                 </Alert>
             )}
 
@@ -416,136 +454,144 @@ export const ActivityLogPage = () => {
             >
                 <CardContent sx={{ p: 0 }}>
                     <List sx={{ width: '100%' }}>
-                        {filteredActivities.map((activity: TrackedActivity, index: number) => (
-                            <React.Fragment key={activity._id}>
-                                <ListItem
-                                    alignItems="flex-start"
-                                    sx={{
-                                        py: 2,
-                                        px: 3,
-                                        '&:hover': {
-                                            bgcolor: 'rgba(0, 0, 0, 0.03)'
-                                        }
-                                    }}
-                                >
-                                    {isEditMode && (
-                                        <ListItemIcon sx={{ minWidth: 'auto', mr: 2 }}>
-                                            <Checkbox
-                                                checked={selectedActivities.has(activity._id)}
-                                                onChange={() => handleSelectActivity(activity._id)}
-                                                sx={{
-                                                    color: '#007AFF',
-                                                    '&.Mui-checked': {
+                        {filteredTimelineItems.map((item: TimelineItem, index: number) => (
+                            <React.Fragment key={item.data._id}>
+                                {item.type === 'activity' ? (
+                                    <ListItem
+                                        alignItems="flex-start"
+                                        sx={{
+                                            py: 2,
+                                            px: 3,
+                                            '&:hover': {
+                                                bgcolor: 'rgba(0, 0, 0, 0.03)'
+                                            }
+                                        }}
+                                    >
+                                        {isEditMode && (
+                                            <ListItemIcon sx={{ minWidth: 'auto', mr: 2 }}>
+                                                <Checkbox
+                                                    checked={selectedActivities.has(item.data._id)}
+                                                    onChange={() => handleSelectActivity(item.data._id)}
+                                                    sx={{
                                                         color: '#007AFF',
-                                                    },
-                                                }}
-                                            />
-                                        </ListItemIcon>
-                                    )}
-
-                                    {getActivityIconForTrackedActivity(activity) && (
-                                        <Avatar
-                                            sx={{
-                                                bgcolor: getActivityColor(activity),
-                                                width: 40,
-                                                height: 40,
-                                                mr: 2,
-                                                mt: 0.5
-                                            }}
-                                        >
-                                            {getActivityIconForTrackedActivity(activity)}
-                                        </Avatar>
-                                    )}
-
-                                    <ListItemText
-                                        primary={
-                                            <Box display="flex" justifyContent="space-between" alignItems="center">
-                                                <Typography
-                                                    variant="subtitle1"
-                                                    sx={{
-                                                        fontSize: '17px',
-                                                        fontWeight: 500,
-                                                        color: '#007AFF'
+                                                        '&.Mui-checked': {
+                                                            color: '#007AFF',
+                                                        },
                                                     }}
-                                                >
-                                                    {activity.activityName}
-                                                </Typography>
-                                                <ActivityActions
-                                                    activity={activity}
-                                                    onEdit={handleEditClick}
-                                                    onDelete={handleDeleteActivity}
-                                                    onDuplicate={handleDuplicateActivity}
                                                 />
-                                            </Box>
-                                        }
-                                        secondary={
-                                            <>
-                                                <Typography
-                                                    component="span"
-                                                    variant="body2"
-                                                    sx={{
-                                                        display: 'block',
-                                                        color: 'text.secondary',
-                                                        fontSize: '15px',
-                                                        mb: 1
-                                                    }}
-                                                >
-                                                    {format(new Date(activity.timestamp), 'PPP p')}
-                                                </Typography>
-                                                {activity.notes && (
+                                            </ListItemIcon>
+                                        )}
+
+                                        {getActivityIconForTrackedActivity(item.data as TrackedActivity) && (
+                                            <Avatar
+                                                sx={{
+                                                    bgcolor: getActivityColor(item.data as TrackedActivity),
+                                                    width: 40,
+                                                    height: 40,
+                                                    mr: 2,
+                                                    mt: 0.5
+                                                }}
+                                            >
+                                                {getActivityIconForTrackedActivity(item.data as TrackedActivity)}
+                                            </Avatar>
+                                        )}
+
+                                        <ListItemText
+                                            primary={
+                                                <Box display="flex" justifyContent="space-between" alignItems="center">
                                                     <Typography
-                                                        component="p"
-                                                        variant="body2"
+                                                        variant="subtitle1"
                                                         sx={{
-                                                            mt: 1,
-                                                            fontSize: '15px',
-                                                            color: 'text.primary',
-                                                            mb: 1.5
+                                                            fontSize: '17px',
+                                                            fontWeight: 500,
+                                                            color: '#007AFF'
                                                         }}
                                                     >
-                                                        {activity.notes}
+                                                        {(item.data as TrackedActivity).activityName}
                                                     </Typography>
-                                                )}
-                                                <Box sx={{ mt: 1.5, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                                    {activity.values.map((val: TrackedActivityValue) => {
-                                                        const formattedValue = formatFieldValue(val.fieldName, val.value);
-
-                                                        // If it's a React node (food chips), render directly
-                                                        if (React.isValidElement(formattedValue)) {
-                                                            return (
-                                                                <Box key={val.fieldName} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                                    <Typography variant="body2" sx={{ fontSize: '13px', color: '#007AFF', fontWeight: 500 }}>
-                                                                        {val.fieldName}:
-                                                                    </Typography>
-                                                                    {formattedValue}
-                                                                </Box>
-                                                            );
-                                                        }
-
-                                                        // Otherwise render as chip
-                                                        return (
-                                                            <Chip
-                                                                key={val.fieldName}
-                                                                label={formattedValue}
-                                                                variant="outlined"
-                                                                size="small"
-                                                                sx={{
-                                                                    borderColor: '#007AFF',
-                                                                    color: '#007AFF',
-                                                                    fontSize: '13px',
-                                                                    '& .MuiChip-label': {
-                                                                        px: 1.5
-                                                                    }
-                                                                }}
-                                                            />
-                                                        );
-                                                    })}
+                                                    <ActivityActions
+                                                        activity={item.data as TrackedActivity}
+                                                        onEdit={handleEditClick}
+                                                        onDelete={handleDeleteActivity}
+                                                        onDuplicate={handleDuplicateActivity}
+                                                    />
                                                 </Box>
-                                            </>
-                                        }
+                                            }
+                                            secondary={
+                                                <>
+                                                    <Typography
+                                                        component="span"
+                                                        variant="body2"
+                                                        sx={{
+                                                            display: 'block',
+                                                            color: 'text.secondary',
+                                                            fontSize: '15px',
+                                                            mb: 1
+                                                        }}
+                                                    >
+                                                        {format(item.timestamp, 'PPP p')}
+                                                    </Typography>
+                                                    {(item.data as TrackedActivity).notes && (
+                                                        <Typography
+                                                            component="p"
+                                                            variant="body2"
+                                                            sx={{
+                                                                mt: 1,
+                                                                fontSize: '15px',
+                                                                color: 'text.primary',
+                                                                mb: 1.5
+                                                            }}
+                                                        >
+                                                            {(item.data as TrackedActivity).notes}
+                                                        </Typography>
+                                                    )}
+                                                    <Box sx={{ mt: 1.5, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                                        {(item.data as TrackedActivity).values.map((val: TrackedActivityValue) => {
+                                                            const formattedValue = formatFieldValue(val.fieldName, val.value);
+
+                                                            // If it's a React node (food chips), render directly
+                                                            if (React.isValidElement(formattedValue)) {
+                                                                return (
+                                                                    <Box key={val.fieldName} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                                        <Typography variant="body2" sx={{ fontSize: '13px', color: '#007AFF', fontWeight: 500 }}>
+                                                                            {val.fieldName}:
+                                                                        </Typography>
+                                                                        {formattedValue}
+                                                                    </Box>
+                                                                );
+                                                            }
+
+                                                            // Otherwise render as chip
+                                                            return (
+                                                                <Chip
+                                                                    key={val.fieldName}
+                                                                    label={formattedValue}
+                                                                    variant="outlined"
+                                                                    size="small"
+                                                                    sx={{
+                                                                        borderColor: '#007AFF',
+                                                                        color: '#007AFF',
+                                                                        fontSize: '13px',
+                                                                        '& .MuiChip-label': {
+                                                                            px: 1.5
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            );
+                                                        })}
+                                                    </Box>
+                                                </>
+                                            }
+                                        />
+                                    </ListItem>
+                                ) : (
+                                    <MetricRecordItem
+                                        record={item.data as WellnessMetricRecord}
+                                        onEdit={handleEditMetricClick}
+                                        onDelete={handleDeleteMetricRecord}
                                     />
-                                </ListItem>
-                                {index < filteredActivities.length - 1 && <Divider />}
+                                )}
+                                {index < filteredTimelineItems.length - 1 && <Divider />}
                             </React.Fragment>
                         ))}
                     </List>
@@ -571,6 +617,14 @@ export const ActivityLogPage = () => {
                 currentFilters={filters}
             />
 
+            <EditMetricDialog
+                open={isEditMetricDialogOpen}
+                record={selectedMetricRecord}
+                onClose={handleEditMetricClose}
+                onSave={handleUpdateMetricRecord}
+                isSubmitting={false}
+            />
+
             <Snackbar
                 open={isSnackbarOpen}
                 autoHideDuration={5000}
@@ -578,30 +632,6 @@ export const ActivityLogPage = () => {
                 message={snackbarMessage}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             />
-
-            <Dialog
-                open={isDeleteConfirmOpen}
-                onClose={handleCancelDelete}
-                aria-labelledby="delete-confirm-dialog-title"
-                aria-describedby="delete-confirm-dialog-description"
-            >
-                <DialogTitle id="delete-confirm-dialog-title">
-                    Confirm Delete
-                </DialogTitle>
-                <DialogContent>
-                    <DialogContentText id="delete-confirm-dialog-description">
-                        {deleteMessage}
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCancelDelete} color="primary">
-                        Cancel
-                    </Button>
-                    <Button onClick={handleConfirmDelete} color="error" variant="contained">
-                        Delete
-                    </Button>
-                </DialogActions>
-            </Dialog>
         </Box>
     );
 }; 

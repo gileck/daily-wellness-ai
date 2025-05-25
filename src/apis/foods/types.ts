@@ -15,7 +15,7 @@ export interface FoodClient {
     source: 'usda' | 'user';
     usdaFdcId?: number;
     usdaDataType?: string;
-    createdBy?: string;
+    createdBy?: string; // userId for user-created foods
     createdAt: string; // ISO string
     updatedAt: string; // ISO string
 }

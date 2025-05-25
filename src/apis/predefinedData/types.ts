@@ -22,6 +22,8 @@ export interface PredefinedWellnessMetricJSON {
     name: string;
     isPredefined: true; // Always true for these
     defaultEnabled: boolean; // Suggested initial enabled state for new users
+    color?: string; // Default hex color value for the metric
+    icon?: string; // Default Material UI icon name
     // Metrics might have a predefined value type or range in the future (e.g., 1-5 scale for mood)
     // valueType?: 'number' | 'text';
     // valueOptions?: (string | number)[]; // For discrete options

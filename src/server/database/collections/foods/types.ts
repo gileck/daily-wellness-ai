@@ -63,6 +63,7 @@ export interface FoodSearchFilters {
     isUserCreated?: boolean;
     source?: 'usda' | 'user';
     query?: string; // text search on name
+    createdBy?: string; // filter by user who created the food
 }
 
 // For creating new foods

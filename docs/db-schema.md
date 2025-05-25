@@ -37,7 +37,7 @@
 
 ---
 
-## ActivityPresets
+##  
 - **_id**: ObjectId (Primary Key)
 - **userId**: ObjectId (ref: Users)
 - **activityTypeId**: ObjectId (ref: ActivityTypes)
@@ -58,6 +58,8 @@
 - **name**: String (e.g., Energy, Mood, Stress)
 - **isPredefined**: Boolean
 - **enabled**: Boolean
+- **color**: String (optional, stores hex color value)
+- **icon**: String (optional, stores Material UI icon name)
 
 ---
 

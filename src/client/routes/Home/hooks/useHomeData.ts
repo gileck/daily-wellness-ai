@@ -5,6 +5,8 @@ import { getActivityPresets } from '@/apis/activityPresets/client';
 import { ActivityPresetClient } from '@/apis/activityPresets/types';
 import { createTrackedActivity, getTrackedActivities } from '@/apis/trackedActivities/client';
 import { CreateTrackedActivityPayload, TrackedActivityValue, TrackedActivity } from '@/apis/trackedActivities/types';
+import { getWellnessMetrics, trackWellnessMetric } from '@/apis/wellnessMetrics/client';
+import { WellnessMetricClient, TrackWellnessMetricPayload } from '@/apis/wellnessMetrics/types';
 
 // Interface for recently logged activities
 export interface RecentlyLoggedActivity {
@@ -15,6 +17,7 @@ export interface RecentlyLoggedActivity {
 export interface HomeDataState {
     activityTypes: ActivityTypeClient[];
     activityPresets: ActivityPresetClient[];
+    wellnessMetrics: WellnessMetricClient[];
     isLoading: boolean;
     error: string | null;
     isSubmitting: boolean;
@@ -26,11 +29,16 @@ export interface HomeDataState {
         activityType: ActivityTypeClient | null;
         presetValues?: Record<string, unknown>;
     };
+    metricDialog: {
+        open: boolean;
+        metric: WellnessMetricClient | null;
+    };
 }
 
 const getDefaultState = (): HomeDataState => ({
     activityTypes: [],
     activityPresets: [],
+    wellnessMetrics: [],
     isLoading: true,
     error: null,
     isSubmitting: false,
@@ -42,17 +50,25 @@ const getDefaultState = (): HomeDataState => ({
         activityType: null,
         presetValues: undefined,
     },
+    metricDialog: {
+        open: false,
+        metric: null,
+    },
 });
 
 export interface UseHomeDataResult extends HomeDataState {
     fetchActivityTypes: () => Promise<void>;
     fetchActivityPresets: () => Promise<void>;
+    fetchWellnessMetrics: () => Promise<void>;
     fetchRecentActivities: () => Promise<void>;
     openTrackingDialog: (activityType: ActivityTypeClient) => void;
     openTrackingDialogWithPreset: (preset: ActivityPresetClient, activityType: ActivityTypeClient) => void;
     closeTrackingDialog: () => void;
+    openMetricDialog: (metric: WellnessMetricClient) => void;
+    closeMetricDialog: () => void;
     handleTrackActivity: (activityType: ActivityTypeClient, values: TrackedActivityValue[], notes?: string, timestamp?: Date) => Promise<void>;
     handleTrackPreset: (preset: ActivityPresetClient) => Promise<void>;
+    handleTrackMetric: (metric: WellnessMetricClient, value: number | string, notes?: string) => Promise<void>;
     clearSuccessMessage: () => void;
 }
 
@@ -138,6 +154,15 @@ export const useHomeData = (): UseHomeDataResult => {
         }
     }, [updateState]);
 
+    const fetchWellnessMetrics = useCallback(async () => {
+        try {
+            const response = await getWellnessMetrics();
+            updateState({ wellnessMetrics: response.data.wellnessMetrics });
+        } catch (err: unknown) {
+            console.error("Failed to fetch wellness metrics:", err);
+        }
+    }, [updateState]);
+
     const fetchRecentActivities = useCallback(async () => {
         try {
             const now = new Date();
@@ -158,8 +183,9 @@ export const useHomeData = (): UseHomeDataResult => {
     useEffect(() => {
         fetchActivityTypes();
         fetchActivityPresets();
+        fetchWellnessMetrics();
         fetchRecentActivities();
-    }, [fetchActivityTypes, fetchActivityPresets, fetchRecentActivities]);
+    }, [fetchActivityTypes, fetchActivityPresets, fetchWellnessMetrics, fetchRecentActivities]);
 
     const openTrackingDialog = useCallback((activityType: ActivityTypeClient) => {
         updateState({ trackingDialog: { open: true, activityType, presetValues: undefined } });
@@ -177,6 +203,14 @@ export const useHomeData = (): UseHomeDataResult => {
 
     const closeTrackingDialog = useCallback(() => {
         updateState({ trackingDialog: { open: false, activityType: null, presetValues: undefined } });
+    }, [updateState]);
+
+    const openMetricDialog = useCallback((metric: WellnessMetricClient) => {
+        updateState({ metricDialog: { open: true, metric } });
+    }, [updateState]);
+
+    const closeMetricDialog = useCallback(() => {
+        updateState({ metricDialog: { open: false, metric: null } });
     }, [updateState]);
 
     const clearSuccessMessage = useCallback(() => {
@@ -262,16 +296,46 @@ export const useHomeData = (): UseHomeDataResult => {
         openTrackingDialogWithPreset(preset, activityType);
     }, [openTrackingDialogWithPreset, updateState]);
 
+    const handleTrackMetric = useCallback(async (metric: WellnessMetricClient, value: number | string, notes?: string) => {
+        try {
+            const payload: TrackWellnessMetricPayload = {
+                metricId: metric._id,
+                value,
+                notes,
+            };
+            await trackWellnessMetric(payload);
+
+            updateState({ successMessage: `${metric.name} tracked successfully!` });
+
+            // Auto-clear success message after 5 seconds
+            setTimeout(() => {
+                clearSuccessMessage();
+            }, 5000);
+
+        } catch (err: unknown) {
+            let message = 'An unknown error occurred while tracking metric.';
+            if (err instanceof Error) {
+                message = err.message;
+            }
+            updateState({ error: message, isSubmitting: false });
+            console.error("Failed to track metric:", err);
+        }
+    }, [updateState, clearSuccessMessage]);
+
     return {
         ...state,
         fetchActivityTypes,
         fetchActivityPresets,
+        fetchWellnessMetrics,
         fetchRecentActivities,
         openTrackingDialog,
         openTrackingDialogWithPreset,
         closeTrackingDialog,
+        openMetricDialog,
+        closeMetricDialog,
         handleTrackActivity,
         handleTrackPreset,
+        handleTrackMetric,
         clearSuccessMessage,
     };
 }; 

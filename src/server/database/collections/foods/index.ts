@@ -39,7 +39,8 @@ export const getFoodByUsdaId = async (usdaFdcId: number): Promise<Food | null> =
 export const searchFoods = async (
     filters: FoodSearchFilters,
     limit: number = 20,
-    skip: number = 0
+    skip: number = 0,
+    userId?: string
 ): Promise<Food[]> => {
     const collection = await getFoodsCollection();
     const query: Record<string, unknown> = {};
@@ -47,8 +48,18 @@ export const searchFoods = async (
     if (filters.category) query.category = filters.category;
     if (filters.isUserCreated !== undefined) query.isUserCreated = filters.isUserCreated;
     if (filters.source) query.source = filters.source;
+    if (filters.createdBy) query.createdBy = filters.createdBy;
     if (filters.query) {
         query.$text = { $search: filters.query };
+    }
+
+    // If user is authenticated and no specific isUserCreated filter is set,
+    // include USDA foods and user's own foods, but exclude other users' foods
+    if (userId && filters.isUserCreated === undefined && !filters.createdBy) {
+        query.$or = [
+            { isUserCreated: false }, // USDA foods
+            { createdBy: userId } // User's own foods
+        ];
     }
 
     try {
