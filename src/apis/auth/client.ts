@@ -18,21 +18,33 @@ import {
 } from './types';
 
 export const apiLogin = (params: LoginRequest) => {
-    return apiClient.call<LoginResponse, LoginRequest>(login, params);
+    return apiClient.call<LoginResponse, LoginRequest>(login, params, {
+        disableCache: true
+    });
 };
 
 export const apiRegister = (params: RegisterRequest) => {
-    return apiClient.call<RegisterResponse, RegisterRequest>(register, params);
+    return apiClient.call<RegisterResponse, RegisterRequest>(register, params, {
+        disableCache: true
+    });
 };
 
 export const apiFetchCurrentUser = (options?: ApiOptions) => {
-    return apiClient.call<CurrentUserResponse>(me, {}, options);
+    return apiClient.call<CurrentUserResponse>(me, {}, {
+        disableCache: true,
+        ...options
+    });
 };
 
 export const apiLogout = () => {
-    return apiClient.call<LogoutResponse>(logout, {});
+    return apiClient.call<LogoutResponse>(logout, {}, {
+        disableCache: true
+    });
 };
 
 export const apiUpdateProfile = (params: UpdateProfileRequest, options?: ApiOptions) => {
-    return apiClient.call<UpdateProfileResponse, UpdateProfileRequest>(updateProfile, params, options);
+    return apiClient.call<UpdateProfileResponse, UpdateProfileRequest>(updateProfile, params, {
+        disableCache: true,
+        ...options
+    });
 }; 
