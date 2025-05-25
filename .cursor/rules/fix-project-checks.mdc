@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+run `yarn checks`
+fix project rules
+follow the [typescript-guidelines.mdc](mdc:.cursor/rules/typescript-guidelines.mdc) and [eslint-custom-guidelines.mdc](mdc:.cursor/rules/eslint-custom-guidelines.mdc)
+keep running `yarn checks` until there are no issues in the project.
+the task is done where there are no more issues in the project.

@@ -1,0 +1,100 @@
+---
+description: when designing the UI of any part of the app
+globs: 
+alwaysApply: false
+---
+# iOS App Design Guidelines
+
+Designed for a fun, modern, colorful, and easy-to-use experience.
+
+---
+
+## 1. Introduction
+
+* **Goal:** Create an engaging, vibrant interface that feels playful yet intuitive.
+* **Audience:** Tech-savvy users who appreciate modern aesthetics and seamless interactions.
+
+---
+
+## 2. Visual Style
+
+### 2.1 Color Palette
+
+* **Primary Colors:** Choose 2–3 bright hues (e.g., electric blue, coral, lime green).
+* **Accent Colors:** Use complementary pastels for secondary actions and highlights.
+* **Tints & Shades:** Provide 3–5 tints/shades per primary hue for depth and states.
+* **Accessibility:** Ensure contrast ratio ≥ 4.5:1 for text and interactive elements.
+
+### 2.2 Typography
+
+* **Font Family:** SF Pro (System font) for consistency with iOS.
+* **Hierarchy:**
+
+  * Headings: SF Pro Bold, 28–34 pt
+  * Subheadings: SF Pro Semibold, 22–26 pt
+  * Body Text: SF Pro Regular, 16–18 pt
+  * Captions/Labels: SF Pro Regular, 12–14 pt
+* **Line Height:** 1.4×–1.6× font size for readability.
+
+### 2.3 Iconography & Imagery
+
+* **Style:** Rounded, minimal, and outline-first icons with consistent stroke width (2 pt).
+* **Size Grid:** 24 × 24 pt grid with 44 × 44 pt touch areas.
+* **Illustrations:** Flat, vector-based artwork with the same palette; characters or abstract shapes to add personality.
+
+---
+
+## 3. Layout & Spacing
+
+* **Grid System:** 8‑point grid for margins, padding, and spacing.
+* **Margins:** 16 pt on screen edges; 8 pt between small elements.
+* **Containers:** Cards with 16 pt padding, 2 pt shadow (opacity 10%), and 12 pt corner radius.
+
+---
+
+## 4. Components
+
+### 4.1 Buttons
+
+* **Shape:** Rounded corners (corner radius 12 pt).
+* **Height:** Minimum 44 pt for touch.
+* **States:**
+
+  * Default: Solid primary color
+  * Hover/Focus: Darker tint
+  * Disabled: 50% opacity
+
+### 4.2 Input Fields
+
+* **Borders:** 1 pt stroke in a neutral gray (20% opacity).
+* **Focus State:** Thicker (2 pt) stroke in accent color.
+* **Placeholder Text:** 15% darker than background.
+
+### 4.3 Cards & Panes
+
+* **Shadow:** y-offset 2 pt, blur 4 pt, opacity 8%.
+* **Padding:** 16 pt all around.
+* **Corner Radius:** 16 pt.
+
+---
+
+## 5. Motion & Interaction
+
+* **Duration:** 150–300 ms for transitions.
+* **Easing:** Ease-in-out for natural feel.
+* **Microinteractions:**
+
+  * Button taps: quick scale animation (0.95×).
+  * Icon toggles: smooth rotate or color fade.
+
+---
+
+## 7. iOS Platform Patterns
+
+* **Navigation:**
+
+  * Use bottom tab bar with icons + labels.
+  * Large titles on main screens; use inline titles on subviews.
+* **Gestures:** Swipe back, pull-to-refresh, and context menus.
+* **Modals & Sheets:** Use half‐height sheets for quick actions.
+
