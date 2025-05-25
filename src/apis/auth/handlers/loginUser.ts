@@ -40,9 +40,9 @@ export const loginUser = async (
         );
 
         // Set auth cookie
-        console.log('Setting cookie with:', { COOKIE_NAME, token: token.substring(0, 20) + '...', COOKIE_OPTIONS });
+        // console.log('Setting cookie with:', { COOKIE_NAME, token: token.substring(0, 20) + '...', COOKIE_OPTIONS });
         context.setCookie(COOKIE_NAME, token, COOKIE_OPTIONS);
-        console.log('Cookie set successfully');
+        // console.log('Cookie set successfully');
 
         return { user: sanitizeUser(user) };
     } catch (error: unknown) {
