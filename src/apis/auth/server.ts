@@ -9,7 +9,7 @@ export const COOKIE_NAME = 'auth_token';
 export const COOKIE_OPTIONS = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict' as const,
+    sameSite: 'lax' as const, // Changed from 'strict' to 'lax' for better compatibility
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: '/'
 };

@@ -56,7 +56,11 @@ export const processApiCall = async (
       userId,
       getCookieValue: (name: string) => cookies[name],
       setCookie: (name: string, value: string, options: Record<string, unknown>) => {
-        res.setHeader('Set-Cookie', serialize(name, value, options as Record<string, string | number | boolean>));
+        console.log('setCookie called with:', { name, valueLength: value.length, options });
+        const cookieString = serialize(name, value, options as Record<string, string | number | boolean>);
+        console.log('Generated cookie string:', cookieString);
+        res.setHeader('Set-Cookie', cookieString);
+        console.log('Set-Cookie header set');
       },
       clearCookie: (name: string, options: Record<string, unknown>) => {
         res.setHeader('Set-Cookie', serialize(name, '', {
