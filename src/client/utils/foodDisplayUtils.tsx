@@ -3,6 +3,7 @@ import { Chip, Box } from '@mui/material';
 import { FoodClient } from '@/apis/foods/types';
 import { searchFoods } from '@/apis/foods/client';
 import { formatFoodWithEmoji } from './foodEmojiUtils';
+import { FoodPortion } from '@/client/components/FoodSelectionDialog/types';
 
 interface FoodChipsProps {
     foodIds: string[];
@@ -74,10 +75,17 @@ export const FoodChips: React.FC<FoodChipsProps> = ({
 };
 
 export const formatFieldValue = (fieldName: string, value: unknown): React.ReactNode => {
-    // Check if this is a foods field by checking if the value is an array of strings
-    if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') {
-        // Assume this is a foods field if it's an array of strings
-        return <FoodChips foodIds={value} />;
+    // Check if this is a foods field by checking if the value is an array
+    if (Array.isArray(value) && value.length > 0) {
+        // Handle both formats: string[] (old) and FoodPortion[] (new)
+        if (typeof value[0] === 'string') {
+            // Old format: array of food IDs
+            return <FoodChips foodIds={value} />;
+        } else if (typeof value[0] === 'object' && 'foodId' in value[0]) {
+            // New format: array of FoodPortion objects
+            const foodIds = (value as FoodPortion[]).map(portion => portion.foodId);
+            return <FoodChips foodIds={foodIds} />;
+        }
     }
 
     // For all other field types, display as string

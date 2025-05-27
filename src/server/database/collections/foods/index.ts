@@ -1,4 +1,4 @@
-import { Collection, ObjectId } from 'mongodb';
+import { Collection, ObjectId, Sort } from 'mongodb';
 import { getDb } from '../../index';
 import { Food, CreateFoodData, FoodSearchFilters } from './types';
 
@@ -49,8 +49,12 @@ export const searchFoods = async (
     if (filters.isUserCreated !== undefined) query.isUserCreated = filters.isUserCreated;
     if (filters.source) query.source = filters.source;
     if (filters.createdBy) query.createdBy = filters.createdBy;
+    
+    // Use regex for partial matching instead of MongoDB text search
     if (filters.query) {
-        query.$text = { $search: filters.query };
+        // Escape special regex characters and create case-insensitive regex
+        const escapedQuery = filters.query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        query.name = { $regex: escapedQuery, $options: 'i' };
     }
 
     // If user is authenticated and no specific isUserCreated filter is set,
@@ -63,23 +67,52 @@ export const searchFoods = async (
     }
 
     try {
+        const sortCriteria: Sort = { name: 1 };
+        
+        // If there's a query, sort by relevance (name starts with query first, then contains query)
+        if (filters.query) {
+            const results = await collection
+                .find(query)
+                .limit(limit * 2) // Get more results for sorting
+                .skip(skip)
+                .toArray();
+            
+            // Sort by relevance: exact matches first, then starts with, then contains
+            const searchTerm = filters.query.toLowerCase();
+            results.sort((a, b) => {
+                const aName = a.name.toLowerCase();
+                const bName = b.name.toLowerCase();
+                
+                // Exact match
+                if (aName === searchTerm && bName !== searchTerm) return -1;
+                if (bName === searchTerm && aName !== searchTerm) return 1;
+                
+                // Starts with
+                const aStartsWith = aName.startsWith(searchTerm);
+                const bStartsWith = bName.startsWith(searchTerm);
+                if (aStartsWith && !bStartsWith) return -1;
+                if (bStartsWith && !aStartsWith) return 1;
+                
+                // Position of match (earlier is better)
+                const aIndex = aName.indexOf(searchTerm);
+                const bIndex = bName.indexOf(searchTerm);
+                if (aIndex !== bIndex) return aIndex - bIndex;
+                
+                // Finally, alphabetical
+                return aName.localeCompare(bName);
+            });
+            
+            return results.slice(0, limit);
+        }
+        
         return await collection
             .find(query)
             .limit(limit)
             .skip(skip)
-            .sort(filters.query ? { score: { $meta: 'textScore' } } : { name: 1 })
+            .sort(sortCriteria)
             .toArray();
     } catch (error: unknown) {
-        // If text index doesn't exist, create it and retry
-        if (error && typeof error === 'object' && 'code' in error && error.code === 27 && filters.query) {
-            await initializeFoodsIndexes();
-            return await collection
-                .find(query)
-                .limit(limit)
-                .skip(skip)
-                .sort({ score: { $meta: 'textScore' } })
-                .toArray();
-        }
+        console.error('Error in searchFoods:', error);
         throw error;
     }
 };

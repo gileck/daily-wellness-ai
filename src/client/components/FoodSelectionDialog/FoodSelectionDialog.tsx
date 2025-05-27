@@ -29,7 +29,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { FoodClient, SearchFoodsRequest } from '@/apis/foods/types';
-import { searchFoods } from '@/apis/foods/client';
+import { searchFoods, getFood } from '@/apis/foods/client';
 import { formatFoodWithEmoji, getFoodEmoji } from '@/client/utils/foodEmojiUtils';
 import { FoodPortion, CommonServing, PREDEFINED_PORTIONS } from './types';
 import { CustomFoodDialog } from './CustomFoodDialog';
@@ -72,6 +72,32 @@ export const FoodSelectionDialog: React.FC<FoodSelectionDialogProps> = ({
             }
             return part;
         });
+    };
+
+    const loadInitiallySelectedFoods = async (selectedPortions: FoodPortion[]) => {
+        if (selectedPortions.length === 0) return;
+
+        try {
+            const uniqueFoodIds = [...new Set(selectedPortions.map(portion => portion.foodId))];
+            const foodPromises = uniqueFoodIds.map(foodId => getFood({ id: foodId }));
+            const results = await Promise.all(foodPromises);
+
+            const loadedFoods: FoodClient[] = [];
+            results.forEach(result => {
+                if (result.data.food) {
+                    loadedFoods.push(result.data.food);
+                }
+            });
+
+            // Add these foods to allKnownFoods
+            setAllKnownFoods(prev => {
+                const existingIds = new Set(prev.map(f => f.id));
+                const uniqueNewFoods = loadedFoods.filter(f => !existingIds.has(f.id));
+                return [...prev, ...uniqueNewFoods];
+            });
+        } catch (error) {
+            console.error('Error loading initially selected foods:', error);
+        }
     };
 
     const loadFoods = async (query: string = '') => {
@@ -125,7 +151,9 @@ export const FoodSelectionDialog: React.FC<FoodSelectionDialogProps> = ({
 
     useEffect(() => {
         if (open) {
+            // Load foods for the search and load initially selected foods
             loadFoods();
+            loadInitiallySelectedFoods(initialSelectedFoodPortions);
             setSelectedFoodPortions(initialSelectedFoodPortions);
         }
     }, [open, initialSelectedFoodPortions]);
@@ -148,7 +176,7 @@ export const FoodSelectionDialog: React.FC<FoodSelectionDialogProps> = ({
             // Add new food portion with default values
             const newPortion: FoodPortion = {
                 foodId,
-                amount: 1,
+                amount: 100,
                 servingType: 'grams',
                 gramsEquivalent: 100
             };
@@ -171,12 +199,19 @@ export const FoodSelectionDialog: React.FC<FoodSelectionDialogProps> = ({
 
     const handleSave = () => {
         onSave(selectedFoodPortions);
+        handleClose();
+    };
+
+    const handleCancel = () => {
+        setSearchQuery('');
+        setSelectedFoodPortions(initialSelectedFoodPortions);
+        setAllKnownFoods([]);
+        setEditingPortionIndex(null);
         onClose();
     };
 
     const handleClose = () => {
         setSearchQuery('');
-        setSelectedFoodPortions(initialSelectedFoodPortions);
         setAllKnownFoods([]);
         setEditingPortionIndex(null);
         onClose();
@@ -384,7 +419,7 @@ export const FoodSelectionDialog: React.FC<FoodSelectionDialogProps> = ({
         <>
             <Dialog
                 open={open}
-                onClose={handleClose}
+                onClose={handleCancel}
                 maxWidth="md"
                 fullWidth
                 PaperProps={{
@@ -393,7 +428,7 @@ export const FoodSelectionDialog: React.FC<FoodSelectionDialogProps> = ({
             >
                 <DialogTitle sx={{ fontWeight: 600, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     Select Foods
-                    <IconButton onClick={handleClose} sx={{ mr: -1 }}>
+                    <IconButton onClick={handleCancel} sx={{ mr: -1 }}>
                         <CloseIcon />
                     </IconButton>
                 </DialogTitle>
@@ -567,7 +602,7 @@ export const FoodSelectionDialog: React.FC<FoodSelectionDialogProps> = ({
 
                 <DialogActions sx={{ p: 3, pt: 1, gap: 2 }}>
                     <Button
-                        onClick={handleClose}
+                        onClick={handleCancel}
                         sx={{ textTransform: 'none' }}
                     >
                         Cancel

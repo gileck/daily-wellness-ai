@@ -14,16 +14,15 @@ import {
     Typography,
     Alert,
     CircularProgress,
-    FormControlLabel,
-    Checkbox,
-    Chip
+    Grid
 } from '@mui/material';
-import { ActivityTypeClient, ActivityTypeField } from '@/apis/activity/types';
+import { ActivityTypeClient } from '@/apis/activity/types';
 import { ActivityPresetClient, CreateActivityPresetPayload } from '@/apis/activityPresets/types';
 import { FoodSelectionDialog } from '@/client/components/FoodSelectionDialog';
 import { FoodClient } from '@/apis/foods/types';
 import { searchFoods } from '@/apis/foods/client';
-import { formatFoodWithEmoji } from '@/client/utils/foodEmojiUtils';
+import { ActivityFieldRenderer } from '@/client/components/ActivityFieldRenderer';
+import { FoodPortion } from '@/client/components/FoodSelectionDialog/types';
 
 interface AddActivityPresetDialogProps {
     open: boolean;
@@ -104,7 +103,16 @@ export const AddActivityPresetDialog: React.FC<AddActivityPresetDialogProps> = (
         foodFields.forEach(field => {
             const fieldValue = formData.presetFields[field.name];
             if (Array.isArray(fieldValue)) {
-                allFoodIds.push(...fieldValue);
+                // Handle both old format (string[]) and new format (FoodPortion[])
+                if (fieldValue.length > 0) {
+                    if (typeof fieldValue[0] === 'string') {
+                        // Old format: string[]
+                        allFoodIds.push(...(fieldValue as string[]));
+                    } else {
+                        // New format: FoodPortion[]
+                        allFoodIds.push(...(fieldValue as FoodPortion[]).map(portion => portion.foodId));
+                    }
+                }
             }
         });
 
@@ -143,9 +151,9 @@ export const AddActivityPresetDialog: React.FC<AddActivityPresetDialogProps> = (
         setFoodDialogOpen(true);
     };
 
-    const handleFoodSave = (selectedFoodIds: string[]) => {
+    const handleFoodSave = (selectedFoodPortions: FoodPortion[]) => {
         if (currentFoodField) {
-            handleFieldValueChange(currentFoodField, selectedFoodIds);
+            handleFieldValueChange(currentFoodField, selectedFoodPortions);
         }
         setFoodDialogOpen(false);
         setCurrentFoodField(null);
@@ -154,98 +162,6 @@ export const AddActivityPresetDialog: React.FC<AddActivityPresetDialogProps> = (
     const handleFoodDialogClose = () => {
         setFoodDialogOpen(false);
         setCurrentFoodField(null);
-    };
-
-    const renderFieldInput = (field: ActivityTypeField) => {
-        const value = formData.presetFields[field.name] || (field.fieldType === 'Boolean' ? false : field.fieldType === 'Foods' ? [] : '');
-
-        const commonProps = {
-            key: field.name,
-            label: field.name,
-            fullWidth: true,
-            margin: 'normal' as const,
-            value: value,
-            onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => handleFieldValueChange(field.name, e.target.value),
-            sx: {
-                '& .MuiOutlinedInput-root': {
-                    borderRadius: '8px',
-                }
-            }
-        };
-
-        switch (field.fieldType) {
-            case 'Boolean':
-                return (
-                    <Box key={field.name} sx={{ display: 'flex', alignItems: 'center', py: 1 }}>
-                        <FormControlLabel
-                            control={
-                                <Checkbox
-                                    checked={Boolean(value)}
-                                    onChange={(e) => handleFieldValueChange(field.name, e.target.checked)}
-                                />
-                            }
-                            label={field.name}
-                            sx={{
-                                '& .MuiFormControlLabel-label': {
-                                    fontSize: '17px',
-                                    fontWeight: 400
-                                }
-                            }}
-                        />
-                    </Box>
-                );
-            case 'Number':
-                return <TextField {...commonProps} type="number" value={value === '' ? '' : String(value)} onChange={(e) => handleFieldValueChange(field.name, e.target.value === '' ? '' : Number(e.target.value))} />;
-            case 'Time':
-                return <TextField {...commonProps} type="time" InputLabelProps={{ shrink: true }} />;
-            case 'Date':
-                return <TextField {...commonProps} type="date" InputLabelProps={{ shrink: true }} />;
-            case 'Foods':
-                const selectedFoodIds = (value as string[]) || [];
-                return (
-                    <Box key={field.name}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
-                            {field.name}
-                        </Typography>
-                        <Button
-                            variant="outlined"
-                            onClick={() => handleFoodSelection(field.name)}
-                            sx={{
-                                mb: 1,
-                                textTransform: 'none'
-                            }}
-                        >
-                            {selectedFoodIds.length > 0 ? `${selectedFoodIds.length} foods selected` : 'Select Foods'}
-                        </Button>
-                        {selectedFoodIds.length > 0 && (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                {selectedFoodIds.slice(0, 3).map((foodId) => {
-                                    const food = foodsCache.get(foodId);
-                                    return (
-                                        <Chip
-                                            key={foodId}
-                                            label={food?.displayName ? formatFoodWithEmoji(food.displayName) : 'Loading...'}
-                                            size="small"
-                                            sx={{ fontSize: '0.75rem' }}
-                                        />
-                                    );
-                                })}
-                                {selectedFoodIds.length > 3 && (
-                                    <Chip
-                                        label={`+${selectedFoodIds.length - 3} more`}
-                                        size="small"
-                                        sx={{ fontSize: '0.75rem' }}
-                                    />
-                                )}
-                            </Box>
-                        )}
-                    </Box>
-                );
-            case 'Text':
-            case 'String':
-            default:
-                return <TextField {...commonProps} />;
-        }
     };
 
     const handleSubmit = async () => {
@@ -335,7 +251,20 @@ export const AddActivityPresetDialog: React.FC<AddActivityPresetDialogProps> = (
                             <Typography variant="h6" gutterBottom>
                                 Preset Field Values
                             </Typography>
-                            {selectedActivityType.fields.map((field) => renderFieldInput(field))}
+                            <Grid container spacing={2}>
+                                {selectedActivityType.fields.map((field) => (
+                                    <Grid size={12} key={field.name}>
+                                        <ActivityFieldRenderer
+                                            field={field}
+                                            value={formData.presetFields[field.name] || (field.fieldType === 'Boolean' ? false : field.fieldType === 'Foods' ? [] : '')}
+                                            onChange={handleFieldValueChange}
+                                            onFoodSelection={handleFoodSelection}
+                                            foodsCache={foodsCache}
+                                            activityColor={selectedActivityType.color}
+                                        />
+                                    </Grid>
+                                ))}
+                            </Grid>
                         </Box>
                     )}
                 </DialogContent>
@@ -356,11 +285,31 @@ export const AddActivityPresetDialog: React.FC<AddActivityPresetDialogProps> = (
             <FoodSelectionDialog
                 open={foodDialogOpen}
                 onClose={handleFoodDialogClose}
-                onSave={(selectedFoodPortions) => {
-                    const foodIds = selectedFoodPortions.map(portion => portion.foodId);
-                    handleFoodSave(foodIds);
-                }}
-                initialSelectedFoodPortions={[]}
+                onSave={handleFoodSave}
+                initialSelectedFoodPortions={
+                    currentFoodField 
+                        ? (() => {
+                            const fieldValue = formData.presetFields[currentFoodField];
+                            
+                            // Handle both formats: string[] and FoodPortion[]
+                            if (Array.isArray(fieldValue)) {
+                                if (fieldValue.length > 0 && typeof fieldValue[0] === 'string') {
+                                    // Convert string[] to FoodPortion[]
+                                    return (fieldValue as string[]).map(foodId => ({
+                                        foodId,
+                                        amount: 100,
+                                        servingType: 'grams' as const,
+                                        gramsEquivalent: 100
+                                    }));
+                                } else {
+                                    // Already FoodPortion[]
+                                    return fieldValue as FoodPortion[];
+                                }
+                            }
+                            return [];
+                        })()
+                        : []
+                }
             />
         </>
     );
