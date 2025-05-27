@@ -23,7 +23,7 @@ export const apiClient = {
         params,
         options: {
           ...options,
-          disableCache: location.href.includes('localhost') || location.href.includes('disableCache') ? true : options?.disableCache
+          disableCache: true
         }
       }),
     });
