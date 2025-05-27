@@ -45,14 +45,9 @@ export const getTrackedActivitiesWithType = async (
     const { limit = 20, offset = 0, startDate, endDate } = options;
 
     // Debug: Check collection info
-    console.log('Collection name:', collection.collectionName);
-    const totalDocs = await collection.countDocuments({});
-    console.log(`Total documents in ${collection.collectionName}:`, totalDocs);
-
-    // Debug: Check what collections exist in the database
-    const db = await getDb();
-    const collections = await db.listCollections().toArray();
-    console.log('Available collections:', collections.map(c => c.name));
+    // console.log('Collection name:', collection.collectionName);
+    // const totalDocs = await collection.countDocuments({});
+    // console.log(`Total documents in ${collection.collectionName}:`, totalDocs);
 
     // Build query
     const query: Record<string, unknown> = { userId };
