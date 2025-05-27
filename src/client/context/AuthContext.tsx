@@ -56,6 +56,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setError(null);
         try {
             const response = await apiLogin(credentials);
+            setIsLoading(false);
             if (response.data?.user) {
                 setUser(response.data.user);
                 return true;
@@ -65,6 +66,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Login error');
+            setIsLoading(false);
+
             return false;
         } finally {
             setIsLoading(false);
@@ -125,7 +128,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     return (
         <AuthContext.Provider value={value}>
-            {children}
+            {!isLoading && children}
         </AuthContext.Provider>
     );
 };

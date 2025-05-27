@@ -39,7 +39,7 @@ const getDefaultState = (): HomeDataState => ({
     activityTypes: [],
     activityPresets: [],
     wellnessMetrics: [],
-    isLoading: true,
+    isLoading: true, // Start with loading state
     error: null,
     isSubmitting: false,
     successMessage: null,

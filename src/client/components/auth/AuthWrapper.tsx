@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '@/client/context/AuthContext';
 import { LoginForm } from './LoginForm';
-import { Box, CircularProgress, Modal, Paper, Typography } from '@mui/material';
+import { Modal, Paper, Typography } from '@mui/material';
 
 interface AuthWrapperProps {
     children: React.ReactNode;
@@ -10,19 +10,12 @@ interface AuthWrapperProps {
 const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     const { isAuthenticated, isLoading } = useAuth();
 
+    // Show loading while checking authentication status
     if (isLoading) {
-        return (
-            <Box sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                height: '100vh'
-            }}>
-                <CircularProgress />
-            </Box>
-        );
+        return <></>
     }
 
+    // Show login form if not authenticated
     if (!isAuthenticated) {
         return (
             <Modal open={true}>
@@ -43,6 +36,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         );
     }
 
+    // Show app content if authenticated
     return <>{children}</>;
 };
 

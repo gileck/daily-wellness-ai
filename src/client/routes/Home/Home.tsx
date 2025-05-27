@@ -2,11 +2,11 @@ import React from 'react';
 import {
   Paper,
   Typography,
-  Box,
-  CircularProgress,
   Alert,
   Button,
-  Snackbar
+  Snackbar,
+  CircularProgress,
+  Box
 } from '@mui/material';
 import { useHomeData } from './hooks/useHomeData';
 import { TrackActivityDialog } from '@/client/components/TrackActivityDialog';
@@ -37,14 +37,6 @@ export const Home = () => {
     handleTrackPreset
   } = useHomeData();
 
-  if (isLoading && !activityTypes.length) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
-        <CircularProgress sx={{ color: colors.primary }} />
-      </Box>
-    );
-  }
-
   return (
     <Paper
       elevation={0}
@@ -69,7 +61,28 @@ export const Home = () => {
         Daily Wellness
       </Typography>
 
-      {error && (
+      {isLoading && (
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '300px',
+            gap: 2
+          }}
+        >
+          <CircularProgress size={40} />
+          <Typography
+            variant="body1"
+            sx={{ color: '#666666', textAlign: 'center' }}
+          >
+            Loading your wellness data...
+          </Typography>
+        </Box>
+      )}
+
+      {!isLoading && error && (
         <Alert
           severity="error"
           sx={{
@@ -99,43 +112,47 @@ export const Home = () => {
         </Alert>
       )}
 
-      {activityTypes.length === 0 && !isLoading && (
-        <Alert
-          severity="info"
-          sx={{
-            borderRadius: '8px',
-            '& .MuiAlert-icon': {
-              color: colors.info
-            }
-          }}
-        >
-          No activity types configured or enabled. Please configure them in settings.
-        </Alert>
+      {!isLoading && (
+        <>
+          {activityTypes.length === 0 && (
+            <Alert
+              severity="info"
+              sx={{
+                borderRadius: '8px',
+                '& .MuiAlert-icon': {
+                  color: colors.info
+                }
+              }}
+            >
+              No activity types configured or enabled. Please configure them in settings.
+            </Alert>
+          )}
+
+          {/* Activity Types Grid */}
+          <ActivityTypesGrid
+            activityTypes={activityTypes}
+            onActivityClick={openTrackingDialog}
+          />
+
+          {/* Quick Presets Section */}
+          <QuickPresetsSection
+            activityPresets={activityPresets}
+            onPresetClick={handleTrackPreset}
+          />
+
+          {/* Wellness Metrics Section */}
+          <WellnessMetricsSection
+            wellnessMetrics={wellnessMetrics}
+            onMetricClick={openMetricDialog}
+          />
+
+          {/* Recent Activities Section */}
+          <RecentActivitiesSection
+            recentlyLoggedActivities={recentlyLoggedActivities}
+            activityTypes={activityTypes}
+          />
+        </>
       )}
-
-      {/* Activity Types Grid */}
-      <ActivityTypesGrid
-        activityTypes={activityTypes}
-        onActivityClick={openTrackingDialog}
-      />
-
-      {/* Quick Presets Section */}
-      <QuickPresetsSection
-        activityPresets={activityPresets}
-        onPresetClick={handleTrackPreset}
-      />
-
-      {/* Wellness Metrics Section */}
-      <WellnessMetricsSection
-        wellnessMetrics={wellnessMetrics}
-        onMetricClick={openMetricDialog}
-      />
-
-      {/* Recent Activities Section */}
-      <RecentActivitiesSection
-        recentlyLoggedActivities={recentlyLoggedActivities}
-        activityTypes={activityTypes}
-      />
 
       {/* Track Activity Dialog */}
       {trackingDialog.activityType && (
