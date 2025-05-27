@@ -130,12 +130,14 @@ export const useHomeData = (): UseHomeDataResult => {
         };
     });
 
-    const updateState = useCallback((partialState: Partial<HomeDataState>) => {
+    const updateState = useCallback((partialStateOrFunction: Partial<HomeDataState> | ((prev: HomeDataState) => HomeDataState)) => {
         setState(prev => {
-            const newState = { ...prev, ...partialState };
+            const newState = typeof partialStateOrFunction === 'function' 
+                ? partialStateOrFunction(prev)
+                : { ...prev, ...partialStateOrFunction };
             
             // Update global loading state based on individual loading states
-            if (partialState.loadingState) {
+            if (newState.loadingState) {
                 const { activityTypes, activityPresets, wellnessMetrics, recentActivities } = newState.loadingState;
                 newState.isLoading = activityTypes || activityPresets || wellnessMetrics || recentActivities;
             }
@@ -145,10 +147,11 @@ export const useHomeData = (): UseHomeDataResult => {
     }, []);
 
     const fetchActivityTypes = useCallback(async () => {
-        updateState({ 
+        updateState(prev => ({ 
+            ...prev,
             error: null,
-            loadingState: { ...state.loadingState, activityTypes: true }
-        });
+            loadingState: { ...prev.loadingState, activityTypes: true }
+        }));
         try {
             const response = await getActivityTypes();
             const enabledActivityTypes = response.data?.activityTypes.filter(at => at.enabled) || [];
@@ -159,63 +162,72 @@ export const useHomeData = (): UseHomeDataResult => {
                 state.lastLoggedTimes
             );
 
-            updateState({ 
+            updateState(prev => ({ 
+                ...prev,
                 activityTypes: sortedActivities,
-                loadingState: { ...state.loadingState, activityTypes: false }
-            });
+                loadingState: { ...prev.loadingState, activityTypes: false }
+            }));
         } catch (err: unknown) {
             let message = 'An unknown error occurred.';
             if (err instanceof Error) {
                 message = err.message;
             }
-            updateState({ 
+            updateState(prev => ({ 
+                ...prev,
                 error: message,
-                loadingState: { ...state.loadingState, activityTypes: false }
-            });
+                loadingState: { ...prev.loadingState, activityTypes: false }
+            }));
             console.error("Failed to fetch activity types:", err);
         }
-    }, [updateState, state.lastLoggedTimes, state.loadingState]);
+    }, [updateState, state.lastLoggedTimes]);
 
     const fetchActivityPresets = useCallback(async () => {
-        updateState({ 
-            loadingState: { ...state.loadingState, activityPresets: true }
-        });
+        updateState(prev => ({ 
+            ...prev,
+            loadingState: { ...prev.loadingState, activityPresets: true }
+        }));
         try {
             const response = await getActivityPresets();
-            updateState({ 
+            updateState(prev => ({ 
+                ...prev,
                 activityPresets: response.data.activityPresets,
-                loadingState: { ...state.loadingState, activityPresets: false }
-            });
+                loadingState: { ...prev.loadingState, activityPresets: false }
+            }));
         } catch (err: unknown) {
             console.error("Failed to fetch activity presets:", err);
-            updateState({ 
-                loadingState: { ...state.loadingState, activityPresets: false }
-            });
+            updateState(prev => ({ 
+                ...prev,
+                loadingState: { ...prev.loadingState, activityPresets: false }
+            }));
         }
-    }, [updateState, state.loadingState]);
+    }, [updateState]);
 
     const fetchWellnessMetrics = useCallback(async () => {
-        updateState({ 
-            loadingState: { ...state.loadingState, wellnessMetrics: true }
-        });
+        updateState(prev => ({ 
+            ...prev,
+            loadingState: { ...prev.loadingState, wellnessMetrics: true }
+        }));
         try {
             const response = await getWellnessMetrics();
-            updateState({ 
+            updateState(prev => ({ 
+                ...prev,
                 wellnessMetrics: response.data.wellnessMetrics,
-                loadingState: { ...state.loadingState, wellnessMetrics: false }
-            });
+                loadingState: { ...prev.loadingState, wellnessMetrics: false }
+            }));
         } catch (err: unknown) {
             console.error("Failed to fetch wellness metrics:", err);
-            updateState({ 
-                loadingState: { ...state.loadingState, wellnessMetrics: false }
-            });
+            updateState(prev => ({ 
+                ...prev,
+                loadingState: { ...prev.loadingState, wellnessMetrics: false }
+            }));
         }
-    }, [updateState, state.loadingState]);
+    }, [updateState]);
 
     const fetchRecentActivities = useCallback(async () => {
-        updateState({ 
-            loadingState: { ...state.loadingState, recentActivities: true }
-        });
+        updateState(prev => ({ 
+            ...prev,
+            loadingState: { ...prev.loadingState, recentActivities: true }
+        }));
         try {
             const now = new Date();
             const threeHoursAgo = new Date(now.getTime() - (3 * 60 * 60 * 1000)); // 3 hours ago
@@ -226,17 +238,19 @@ export const useHomeData = (): UseHomeDataResult => {
                 limit: 10
             });
 
-            updateState({ 
+            updateState(prev => ({ 
+                ...prev,
                 recentlyLoggedActivities: response.data.trackedActivities,
-                loadingState: { ...state.loadingState, recentActivities: false }
-            });
+                loadingState: { ...prev.loadingState, recentActivities: false }
+            }));
         } catch (err: unknown) {
             console.error("Failed to fetch recent activities:", err);
-            updateState({ 
-                loadingState: { ...state.loadingState, recentActivities: false }
-            });
+            updateState(prev => ({ 
+                ...prev,
+                loadingState: { ...prev.loadingState, recentActivities: false }
+            }));
         }
-    }, [updateState, state.loadingState]);
+    }, [updateState]);
 
     useEffect(() => {
         fetchActivityTypes();
