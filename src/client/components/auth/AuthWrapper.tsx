@@ -10,7 +10,7 @@ interface AuthWrapperProps {
 const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     const { isAuthenticated, isLoading } = useAuth();
 
-    // Show loading while checking authentication status
+    // Hide content while checking authentication status
     if (isLoading) {
         return <></>
     }
