@@ -44,12 +44,6 @@ export const getTrackedActivitiesWithType = async (
     const collection = await getTrackedActivitiesCollection();
     const { limit = 20, offset = 0, startDate, endDate } = options;
 
-    // Debug: Check collection info
-    // console.log('Collection name:', collection.collectionName);
-    // const totalDocs = await collection.countDocuments({});
-    // console.log(`Total documents in ${collection.collectionName}:`, totalDocs);
-
-    // Build query
     const query: Record<string, unknown> = { userId };
     if (startDate || endDate) {
         query.timestamp = {};
@@ -57,14 +51,6 @@ export const getTrackedActivitiesWithType = async (
         if (endDate) (query.timestamp as Record<string, Date>).$lte = endDate;
     }
 
-    console.log('Query:', query);
-    console.log('User ID type:', typeof userId, userId);
-
-    // Debug: Check documents matching user
-    const userDocs = await collection.countDocuments({ userId });
-    console.log(`Documents for user ${userId}:`, userDocs);
-
-    // Aggregation pipeline to populate ActivityType data
     const aggregationPipeline = [
         { $match: query },
         { $sort: { timestamp: -1 as const } },
@@ -99,15 +85,7 @@ export const getTrackedActivitiesWithType = async (
         }
     ];
 
-    console.log('Executing aggregation pipeline for TrackedActivities with ActivityType lookup...');
     const activities = await collection.aggregate<TrackedActivityWithType>(aggregationPipeline).toArray();
-    console.log(`Found ${activities.length} activities with populated ActivityType data`);
-
-    // Log the first activity to debug ActivityType population
-    if (activities.length > 0) {
-        const firstActivity = activities[0];
-        console.log(`First activity: ${firstActivity.activityName}, ActivityType:`, firstActivity.activityType);
-    }
 
     const total = await collection.countDocuments(query);
 

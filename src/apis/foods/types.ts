@@ -93,4 +93,27 @@ export type GetFoodsCountRequest = Record<string, never>;
 export interface GetFoodsCountResponse {
     count: number;
     error?: string;
+}
+
+// Generate Food Data with AI
+export interface GenerateFoodDataRequest {
+    foodDescription: string;
+    additionalContext?: string;
+    modelId?: string;
+}
+
+export interface GenerateFoodDataResponse {
+    suggestedFood: {
+        name: string;
+        brand?: string;
+        category: string;
+        categorySimplified: FoodCategory;
+        nutritionPer100g: NutritionInfo;
+        commonServings: ServingSize[];
+    };
+    aiCost: {
+        totalCost: number;
+    };
+    modelUsed: string;
+    error?: string;
 } 

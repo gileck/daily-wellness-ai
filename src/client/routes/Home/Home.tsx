@@ -4,7 +4,9 @@ import {
   Typography,
   Alert,
   Button,
-  Snackbar
+  Snackbar,
+  LinearProgress,
+  Box
 } from '@mui/material';
 import { useHomeData } from './hooks/useHomeData';
 import { TrackActivityDialog } from '@/client/components/TrackActivityDialog';
@@ -17,6 +19,7 @@ export const Home = () => {
     activityTypes,
     wellnessMetrics,
     isLoading,
+    isRefreshing,
     error,
     trackingDialog,
     metricDialog,
@@ -35,9 +38,38 @@ export const Home = () => {
     handleTrackPreset
   } = useHomeData();
 
-  // Don't render anything while loading
+  // Show progress bar during initial loading
   if (isLoading) {
-    return null;
+    return (
+      <Box
+        sx={{
+          width: '100%',
+          height: '100vh',
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'center',
+          pt: 0
+        }}
+      >
+        <Box
+          sx={{
+            width: '100%',
+            maxWidth: '800px',
+            position: 'relative'
+          }}
+        >
+          <LinearProgress
+            sx={{
+              height: 3,
+              borderRadius: '4px',
+              '& .MuiLinearProgress-bar': {
+                backgroundColor: colors.primary
+              }
+            }}
+          />
+        </Box>
+      </Box>
+    );
   }
 
   return (
@@ -47,16 +79,41 @@ export const Home = () => {
         p: 3,
         width: '100%',
         backgroundColor: colors.background,
-        borderRadius: '16px'
+        borderRadius: '16px',
+        position: 'relative'
       }}
     >
+      {/* Progress overlay when refreshing data */}
+      {isRefreshing && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            borderRadius: '16px 16px 0 0'
+          }}
+        >
+          <LinearProgress
+            sx={{
+              height: 3,
+              borderRadius: '16px 16px 0 0',
+              '& .MuiLinearProgress-bar': {
+                backgroundColor: colors.primary
+              }
+            }}
+          />
+        </Box>
+      )}
+
       <Typography
         variant="h4"
         gutterBottom
         sx={{
-          mb: 4,
+          mb: 2,
           fontWeight: 600,
-          fontSize: '28px',
+          fontSize: '24px',
           color: '#1A1A1A',
           textAlign: 'center'
         }}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Dialog,
     DialogTitle,
@@ -21,12 +21,27 @@ import {
     TableRow,
     Paper,
     Alert,
-    CircularProgress
+    CircularProgress,
+    LinearProgress,
+    Chip,
+    Divider
 } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon, Close as CloseIcon } from '@mui/icons-material';
+import { 
+    Add as AddIcon, 
+    Delete as DeleteIcon, 
+    Close as CloseIcon,
+    AutoAwesome as AutoAwesomeIcon,
+    Clear as ClearIcon
+} from '@mui/icons-material';
 import { CreateFoodRequest } from '@/apis/foods/types';
-import { createFood } from '@/apis/foods/client';
+import { createFood, generateFoodData } from '@/apis/foods/client';
 import { FoodCategory, NutritionInfo, ServingSize } from '@/server/database/collections/foods/types';
+import { getAllModels } from '@/server/ai/models';
+import { 
+    DEFAULT_NUTRITION, 
+    VALID_FOOD_CATEGORIES, 
+    FOOD_CATEGORY_LABELS 
+} from '@/common/utils/foodUtils';
 
 interface CustomFoodDialogProps {
     open: boolean;
@@ -44,29 +59,33 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
         brand: '',
         category: '',
         categorySimplified: '' as FoodCategory | '',
-        nutritionPer100g: {
-            calories: 0,
-            protein: 0,
-            carbs: 0,
-            fat: 0,
-            fiber: 0,
-            sugar: 0,
-            sodium: 0,
-            cholesterol: 0,
-            saturatedFat: 0,
-            transFat: 0,
-        } as NutritionInfo,
+        nutritionPer100g: { ...DEFAULT_NUTRITION } as NutritionInfo,
         commonServings: [] as ServingSize[],
     });
+
+    // AI Generation state
+    const [showAISection, setShowAISection] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [aiDescription, setAiDescription] = useState('');
+    const [aiContext, setAiContext] = useState('');
+    const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
+    const [lastGenerationCost, setLastGenerationCost] = useState<number | null>(null);
+    const [hasGeneratedData, setHasGeneratedData] = useState(false);
 
     const [newServing, setNewServing] = useState({ name: '', gramsEquivalent: 0 });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const categories: FoodCategory[] = [
-        'fruits', 'vegetables', 'grains', 'proteins', 'dairy',
-        'nuts_seeds', 'oils_fats', 'beverages', 'sweets', 'condiments', 'other'
-    ];
+    // Load available models
+    const availableModels = getAllModels();
+
+    // Load model preference from localStorage
+    useEffect(() => {
+        const savedModel = localStorage.getItem('preferredAIModel');
+        if (savedModel && availableModels.some(model => model.id === savedModel)) {
+            setSelectedModel(savedModel);
+        }
+    }, [availableModels]);
 
     const handleInputChange = (field: string, value: string | FoodCategory) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -94,6 +113,75 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
             ...prev,
             commonServings: prev.commonServings.filter((_, i) => i !== index)
         }));
+    };
+
+    // AI Generation functions
+    const handleAIGenerate = async () => {
+        if (!aiDescription.trim()) {
+            setError('Please enter a food description');
+            return;
+        }
+
+        setIsGenerating(true);
+        setError(null);
+
+        try {
+            const result = await generateFoodData({
+                foodDescription: aiDescription.trim(),
+                additionalContext: aiContext.trim() || undefined,
+                modelId: selectedModel
+            });
+
+            if (result.data?.error) {
+                setError(result.data.error);
+            } else if (result.data?.suggestedFood) {
+                const suggestedFood = result.data.suggestedFood;
+                
+                // Populate form with AI-generated data
+                setFormData(prev => ({
+                    ...prev,
+                    name: suggestedFood.name,
+                    brand: suggestedFood.brand || '',
+                    category: suggestedFood.category,
+                    categorySimplified: suggestedFood.categorySimplified || '',
+                    nutritionPer100g: suggestedFood.nutritionPer100g,
+                    commonServings: suggestedFood.commonServings
+                }));
+
+                setLastGenerationCost(result.data.aiCost.totalCost);
+                setHasGeneratedData(true);
+
+                // Save model preference
+                localStorage.setItem('preferredAIModel', selectedModel);
+            }
+        } catch (err) {
+            setError('Failed to generate food data');
+            console.error('Error generating food data:', err);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handleClearAndRegenerate = () => {
+        setFormData(prev => ({
+            ...prev,
+            name: '',
+            brand: '',
+            category: '',
+            categorySimplified: '',
+            nutritionPer100g: { ...DEFAULT_NUTRITION },
+            commonServings: []
+        }));
+        setHasGeneratedData(false);
+        setLastGenerationCost(null);
+    };
+
+    const handleCloseAI = () => {
+        setShowAISection(false);
+        setAiDescription('');
+        setAiContext('');
+        setLastGenerationCost(null);
+        setHasGeneratedData(false);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -133,22 +221,16 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
             brand: '',
             category: '',
             categorySimplified: '',
-            nutritionPer100g: {
-                calories: 0,
-                protein: 0,
-                carbs: 0,
-                fat: 0,
-                fiber: 0,
-                sugar: 0,
-                sodium: 0,
-                cholesterol: 0,
-                saturatedFat: 0,
-                transFat: 0,
-            },
+            nutritionPer100g: { ...DEFAULT_NUTRITION },
             commonServings: [],
         });
         setNewServing({ name: '', gramsEquivalent: 0 });
         setError(null);
+        setShowAISection(false);
+        setAiDescription('');
+        setAiContext('');
+        setLastGenerationCost(null);
+        setHasGeneratedData(false);
         onClose();
     };
 
@@ -178,6 +260,125 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                     </Alert>
                 )}
 
+                {/* AI Generation Section */}
+                <Box sx={{ mb: 3 }}>
+                    {!showAISection ? (
+                        <Button
+                            variant="outlined"
+                            startIcon={<AutoAwesomeIcon />}
+                            onClick={() => setShowAISection(true)}
+                            sx={{ 
+                                textTransform: 'none',
+                                borderRadius: 2,
+                                borderColor: 'primary.main',
+                                color: 'primary.main',
+                                '&:hover': {
+                                    backgroundColor: 'primary.50',
+                                    borderColor: 'primary.dark'
+                                }
+                            }}
+                            disabled={isGenerating}
+                        >
+                            Generate with AI
+                        </Button>
+                    ) : (
+                        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'grey.50' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <AutoAwesomeIcon color="primary" />
+                                    Generate with AI
+                                </Typography>
+                                <IconButton size="small" onClick={handleCloseAI}>
+                                    <CloseIcon />
+                                </IconButton>
+                            </Box>
+
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <TextField
+                                    fullWidth
+                                    label="Food Description"
+                                    value={aiDescription}
+                                    onChange={(e) => setAiDescription(e.target.value)}
+                                    placeholder="e.g., 'grilled chicken breast', 'chocolate chip cookies', 'quinoa salad'"
+                                    disabled={isGenerating}
+                                    required
+                                />
+
+                                <TextField
+                                    fullWidth
+                                    label="Additional Context (optional)"
+                                    value={aiContext}
+                                    onChange={(e) => setAiContext(e.target.value)}
+                                    placeholder="e.g., 'homemade', 'organic', 'store-bought brand name'"
+                                    disabled={isGenerating}
+                                    multiline
+                                    rows={2}
+                                />
+
+                                <FormControl fullWidth disabled={isGenerating}>
+                                    <InputLabel>AI Model</InputLabel>
+                                    <Select
+                                        value={selectedModel}
+                                        onChange={(e) => setSelectedModel(e.target.value)}
+                                        label="AI Model"
+                                    >
+                                        {availableModels.map((model) => (
+                                            <MenuItem key={model.id} value={model.id}>
+                                                {model.name} ({model.provider})
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+
+                                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <Button
+                                        variant="contained"
+                                        onClick={handleAIGenerate}
+                                        disabled={!aiDescription.trim() || isGenerating}
+                                        startIcon={isGenerating ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+                                        sx={{ textTransform: 'none' }}
+                                    >
+                                        {isGenerating ? 'Generating...' : 'Generate'}
+                                    </Button>
+
+                                    {hasGeneratedData && (
+                                        <Button
+                                            variant="outlined"
+                                            onClick={handleClearAndRegenerate}
+                                            startIcon={<ClearIcon />}
+                                            disabled={isGenerating}
+                                            sx={{ textTransform: 'none' }}
+                                        >
+                                            Clear & Regenerate
+                                        </Button>
+                                    )}
+
+                                    {lastGenerationCost !== null && (
+                                        <Chip
+                                            label={`Cost: $${lastGenerationCost.toFixed(4)}`}
+                                            size="small"
+                                            color="success"
+                                            variant="outlined"
+                                        />
+                                    )}
+                                </Box>
+
+                                {isGenerating && (
+                                    <LinearProgress sx={{ borderRadius: 1 }} />
+                                )}
+
+                                {hasGeneratedData && (
+                                    <Alert severity="success" sx={{ borderRadius: 2 }}>
+                                        Food data generated successfully! You can edit the fields below or generate new data.
+                                    </Alert>
+                                )}
+                            </Box>
+                        </Paper>
+                    )}
+                </Box>
+
+                <Divider sx={{ mb: 3 }} />
+
                 <Box component="form" onSubmit={handleSubmit}>
                     {/* Basic Information */}
                     <Box sx={{ display: 'flex', gap: 2, mb: 3, flexDirection: { xs: 'column', sm: 'row' } }}>
@@ -187,12 +388,14 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                             value={formData.name}
                             onChange={(e) => handleInputChange('name', e.target.value)}
                             required
+                            disabled={isGenerating}
                         />
                         <TextField
                             fullWidth
                             label="Brand (optional)"
                             value={formData.brand}
                             onChange={(e) => handleInputChange('brand', e.target.value)}
+                            disabled={isGenerating}
                         />
                     </Box>
 
@@ -203,8 +406,9 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                             value={formData.category}
                             onChange={(e) => handleInputChange('category', e.target.value)}
                             required
+                            disabled={isGenerating}
                         />
-                        <FormControl fullWidth>
+                        <FormControl fullWidth disabled={isGenerating}>
                             <InputLabel>Simplified Category (optional)</InputLabel>
                             <Select
                                 value={formData.categorySimplified}
@@ -212,9 +416,9 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                                 label="Simplified Category (optional)"
                             >
                                 <MenuItem value="">None</MenuItem>
-                                {categories.map((category) => (
+                                {VALID_FOOD_CATEGORIES.map((category) => (
                                     <MenuItem key={category} value={category}>
-                                        {category.replace('_', ' ').toUpperCase()}
+                                        {FOOD_CATEGORY_LABELS[category]}
                                     </MenuItem>
                                 ))}
                             </Select>
@@ -235,6 +439,7 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                             required
                             inputProps={{ min: 0 }}
                             sx={{ minWidth: 120, flex: '1 1 auto' }}
+                            disabled={isGenerating}
                         />
                         <TextField
                             label="Protein (g)"
@@ -244,6 +449,7 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                             required
                             inputProps={{ min: 0, step: 0.1 }}
                             sx={{ minWidth: 120, flex: '1 1 auto' }}
+                            disabled={isGenerating}
                         />
                         <TextField
                             label="Carbs (g)"
@@ -253,6 +459,7 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                             required
                             inputProps={{ min: 0, step: 0.1 }}
                             sx={{ minWidth: 120, flex: '1 1 auto' }}
+                            disabled={isGenerating}
                         />
                         <TextField
                             label="Fat (g)"
@@ -262,6 +469,7 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                             required
                             inputProps={{ min: 0, step: 0.1 }}
                             sx={{ minWidth: 120, flex: '1 1 auto' }}
+                            disabled={isGenerating}
                         />
                     </Box>
 
@@ -274,6 +482,7 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                             required
                             inputProps={{ min: 0, step: 0.1 }}
                             sx={{ minWidth: 120, flex: '1 1 auto' }}
+                            disabled={isGenerating}
                         />
                         <TextField
                             label="Sugar (g)"
@@ -282,6 +491,7 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                             onChange={(e) => handleNutritionChange('sugar', Number(e.target.value))}
                             inputProps={{ min: 0, step: 0.1 }}
                             sx={{ minWidth: 120, flex: '1 1 auto' }}
+                            disabled={isGenerating}
                         />
                         <TextField
                             label="Sodium (mg)"
@@ -290,6 +500,7 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                             onChange={(e) => handleNutritionChange('sodium', Number(e.target.value))}
                             inputProps={{ min: 0, step: 0.1 }}
                             sx={{ minWidth: 120, flex: '1 1 auto' }}
+                            disabled={isGenerating}
                         />
                         <TextField
                             label="Cholesterol (mg)"
@@ -298,6 +509,7 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                             onChange={(e) => handleNutritionChange('cholesterol', Number(e.target.value))}
                             inputProps={{ min: 0, step: 0.1 }}
                             sx={{ minWidth: 120, flex: '1 1 auto' }}
+                            disabled={isGenerating}
                         />
                     </Box>
 
@@ -313,6 +525,7 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                             onChange={(e) => setNewServing(prev => ({ ...prev, name: e.target.value }))}
                             placeholder="e.g., 1 cup, 1 medium"
                             sx={{ flex: 1 }}
+                            disabled={isGenerating}
                         />
                         <TextField
                             label="Grams Equivalent"
@@ -321,12 +534,13 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                             onChange={(e) => setNewServing(prev => ({ ...prev, gramsEquivalent: Number(e.target.value) }))}
                             inputProps={{ min: 0, step: 0.1 }}
                             sx={{ flex: 1 }}
+                            disabled={isGenerating}
                         />
                         <Button
                             variant="outlined"
                             onClick={handleAddServing}
                             startIcon={<AddIcon />}
-                            disabled={!newServing.name || newServing.gramsEquivalent <= 0}
+                            disabled={!newServing.name || newServing.gramsEquivalent <= 0 || isGenerating}
                             sx={{ minWidth: 100, height: '56px' }}
                         >
                             Add
@@ -353,6 +567,7 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                                                     size="small"
                                                     onClick={() => handleRemoveServing(index)}
                                                     color="error"
+                                                    disabled={isGenerating}
                                                 >
                                                     <DeleteIcon />
                                                 </IconButton>
@@ -370,14 +585,14 @@ export const CustomFoodDialog: React.FC<CustomFoodDialogProps> = ({
                 <Button
                     onClick={handleClose}
                     sx={{ textTransform: 'none' }}
-                    disabled={isLoading}
+                    disabled={isLoading || isGenerating}
                 >
                     Cancel
                 </Button>
                 <Button
                     onClick={handleSubmit}
                     variant="contained"
-                    disabled={!isValid || isLoading}
+                    disabled={!isValid || isLoading || isGenerating}
                     sx={{ textTransform: 'none' }}
                     startIcon={isLoading ? <CircularProgress size={16} /> : undefined}
                 >

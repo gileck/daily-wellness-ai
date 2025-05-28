@@ -66,6 +66,16 @@ const Transition = React.forwardRef(function Transition(
     }} />;
 });
 
+// Helper function to format date for datetime-local input in local time
+const formatDateTimeLocal = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
 export const ActivityDialog: React.FC<ActivityDialogProps> = ({
     open,
     activityType,
@@ -552,15 +562,33 @@ export const ActivityDialog: React.FC<ActivityDialogProps> = ({
                                 type="datetime-local"
                                 fullWidth
                                 margin="dense"
-                                value={timestamp.toISOString().slice(0, 16)}
+                                value={formatDateTimeLocal(timestamp)}
                                 onChange={(e) => setTimestamp(new Date(e.target.value))}
                                 InputLabelProps={{ shrink: true }}
                                 sx={{
                                     '& .MuiOutlinedInput-root': {
                                         borderRadius: '8px',
+                                        minHeight: '56px',
                                         '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                                             borderColor: activityType?.color || '#007AFF',
                                             borderWidth: '2px'
+                                        }
+                                    },
+                                    '& .MuiOutlinedInput-input': {
+                                        padding: '16.5px 14px',
+                                        minHeight: '1.4375em',
+                                        '@media (max-width: 768px)': {
+                                            fontSize: '16px',
+                                            padding: '16.5px 14px',
+                                            lineHeight: '1.4375em',
+                                            minHeight: '1.4375em',
+                                            '&::-webkit-datetime-edit': {
+                                                padding: '0',
+                                                lineHeight: '1.4375em'
+                                            },
+                                            '&::-webkit-datetime-edit-fields-wrapper': {
+                                                padding: '0'
+                                            }
                                         }
                                     }
                                 }}

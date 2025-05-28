@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Tabs, Tab, Container, Typography } from '@mui/material';
+import { Box, Tabs, Tab, Container } from '@mui/material';
 import { ActivitiesTab } from './components/ActivitiesTab';
 import { MetricsTab } from './components/MetricsTab';
 
@@ -33,11 +33,7 @@ const ConfigureActivities = () => {
     };
 
     return (
-        <Container maxWidth="lg" sx={{ py: 4 }}>
-            <Typography variant="h4" component="h1" gutterBottom align="center" sx={{ mb: { xs: 3, md: 5 }, color: 'text.primary', fontWeight: 'bold' }}>
-                Settings
-            </Typography>
-
+        <Container maxWidth="lg" sx={{ py: 0, px: 0 }}>
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
                 <Tabs value={tabValue} onChange={handleTabChange} aria-label="configuration tabs">
                     <Tab label="Activities" id="simple-tab-0" aria-controls="simple-tabpanel-0" />

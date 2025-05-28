@@ -6,7 +6,8 @@ import {
     API_CREATE_FOOD,
     API_UPDATE_FOOD,
     API_DELETE_FOOD,
-    API_GET_FOODS_COUNT
+    API_GET_FOODS_COUNT,
+    API_GENERATE_FOOD_DATA
 } from './index';
 import {
     SearchFoodsRequest,
@@ -21,6 +22,8 @@ import {
     DeleteFoodResponse,
     GetFoodsCountRequest,
     GetFoodsCountResponse,
+    GenerateFoodDataRequest,
+    GenerateFoodDataResponse,
 } from './types';
 
 export const searchFoods = (
@@ -47,4 +50,8 @@ export const deleteFood = (payload: DeleteFoodRequest): Promise<CacheResult<Dele
 
 export const getFoodsCount = (payload: GetFoodsCountRequest): Promise<CacheResult<GetFoodsCountResponse>> => {
     return apiClient.call(API_GET_FOODS_COUNT, payload);
+};
+
+export const generateFoodData = (payload: GenerateFoodDataRequest): Promise<CacheResult<GenerateFoodDataResponse>> => {
+    return apiClient.call(API_GENERATE_FOOD_DATA, payload);
 }; 

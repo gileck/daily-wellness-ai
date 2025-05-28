@@ -32,7 +32,6 @@ export const Layout = ({ children }: { children?: ReactNode }) => {
       minHeight: '100vh',
       // Add iOS-specific styles when in standalone mode
       ...(isStandalone && isMobile && {
-        // Ensure content is below the iOS status bar
         paddingTop: 'env(safe-area-inset-top)',
         // Ensure content is not covered by the home indicator on newer iPhones
         paddingBottom: 'env(safe-area-inset-bottom)',
@@ -57,9 +56,8 @@ export const Layout = ({ children }: { children?: ReactNode }) => {
 
       {/* Main Content */}
       <Container component="main" sx={{
+        px: 0,
         flexGrow: 1,
-        py: 3,
-        px: { xs: 2, sm: 3 },
         maxWidth: { xs: '100%', sm: 'md', md: 'lg' },
         // Add iOS momentum scrolling for a more native feel
         WebkitOverflowScrolling: 'touch',

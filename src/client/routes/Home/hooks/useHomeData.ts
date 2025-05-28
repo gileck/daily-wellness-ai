@@ -1,413 +1,191 @@
 import { useState, useCallback, useEffect } from 'react';
 import { getActivityTypes } from '@/apis/activity/client';
-import { ActivityTypeClient } from '@/apis/activity/types';
-import { getActivityPresets } from '@/apis/activityPresets/client';
 import { ActivityPresetClient } from '@/apis/activityPresets/types';
-import { createTrackedActivity, getTrackedActivities } from '@/apis/trackedActivities/client';
-import { CreateTrackedActivityPayload, TrackedActivityValue, TrackedActivity } from '@/apis/trackedActivities/types';
-import { getWellnessMetrics, trackWellnessMetric } from '@/apis/wellnessMetrics/client';
-import { WellnessMetricClient, TrackWellnessMetricPayload } from '@/apis/wellnessMetrics/types';
+import { useActivityHooks } from './useActivityHooks';
+import { useMetricsHooks } from './useMetricsHooks';
+import { useRecentActivitiesHooks } from './useRecentActivitiesHooks';
+import { useDialogHooks } from './useDialogHooks';
+import { UseHomeDataResult, LoadingState } from './useHomeData.types';
 
-// Interface for recently logged activities
-export interface RecentlyLoggedActivity {
-    activityType: ActivityTypeClient;
-    timestamp: Date;
-}
-
-export interface HomeDataState {
-    activityTypes: ActivityTypeClient[];
-    activityPresets: ActivityPresetClient[];
-    wellnessMetrics: WellnessMetricClient[];
+interface MainState {
     isLoading: boolean;
     error: string | null;
     isSubmitting: boolean;
     successMessage: string | null;
-    lastLoggedTimes: Record<string, Date>;
-    recentlyLoggedActivities: TrackedActivity[];
-    loadingState: {
-        activityTypes: boolean;
-        activityPresets: boolean;
-        wellnessMetrics: boolean;
-        recentActivities: boolean;
-    };
-    trackingDialog: {
-        open: boolean;
-        activityType: ActivityTypeClient | null;
-        presetValues?: Record<string, unknown>;
-    };
-    metricDialog: {
-        open: boolean;
-        metric: WellnessMetricClient | null;
-    };
+    isRefreshing: boolean;
+    hasInitiallyLoaded: boolean;
+    loadingState: LoadingState;
 }
 
-const getDefaultState = (): HomeDataState => ({
-    activityTypes: [],
-    activityPresets: [],
-    wellnessMetrics: [],
+const getDefaultMainState = (): MainState => ({
     isLoading: true, // Start with loading state
     error: null,
     isSubmitting: false,
     successMessage: null,
-    lastLoggedTimes: {},
-    recentlyLoggedActivities: [],
+    isRefreshing: false,
+    hasInitiallyLoaded: false,
     loadingState: {
         activityTypes: true,
         activityPresets: true,
         wellnessMetrics: true,
         recentActivities: true,
-    },
-    trackingDialog: {
-        open: false,
-        activityType: null,
-        presetValues: undefined,
-    },
-    metricDialog: {
-        open: false,
-        metric: null,
-    },
+    }
 });
 
-export interface UseHomeDataResult extends HomeDataState {
-    fetchActivityTypes: () => Promise<void>;
-    fetchActivityPresets: () => Promise<void>;
-    fetchWellnessMetrics: () => Promise<void>;
-    fetchRecentActivities: () => Promise<void>;
-    openTrackingDialog: (activityType: ActivityTypeClient) => void;
-    openTrackingDialogWithPreset: (preset: ActivityPresetClient, activityType: ActivityTypeClient) => void;
-    closeTrackingDialog: () => void;
-    openMetricDialog: (metric: WellnessMetricClient) => void;
-    closeMetricDialog: () => void;
-    handleTrackActivity: (activityType: ActivityTypeClient, values: TrackedActivityValue[], notes?: string, timestamp?: Date) => Promise<void>;
-    handleTrackPreset: (preset: ActivityPresetClient) => Promise<void>;
-    handleTrackMetric: (metric: WellnessMetricClient, value: number | string, notes?: string) => Promise<void>;
-    clearSuccessMessage: () => void;
-}
-
-// Load data from localStorage
-const loadFromLocalStorage = () => {
-    try {
-        const lastLoggedTimesStr = localStorage.getItem('lastLoggedTimes');
-        const lastLoggedTimes = lastLoggedTimesStr ?
-            Object.entries(JSON.parse(lastLoggedTimesStr)).reduce((acc, [key, value]) => {
-                acc[key] = new Date(value as string);
-                return acc;
-            }, {} as Record<string, Date>) :
-            {};
-
-        return { lastLoggedTimes };
-    } catch (e) {
-        console.error('Error loading from localStorage:', e);
-        return { lastLoggedTimes: {} };
-    }
-};
-
-// Helper to sort activities by last logged time
-const sortActivitiesByLastLogged = (
-    activities: ActivityTypeClient[],
-    lastLoggedTimes: Record<string, Date>
-): ActivityTypeClient[] => {
-    return [...activities].sort((a, b) => {
-        const timeA = lastLoggedTimes[a._id] ? lastLoggedTimes[a._id].getTime() : 0;
-        const timeB = lastLoggedTimes[b._id] ? lastLoggedTimes[b._id].getTime() : 0;
-
-        // Recently logged items (higher timestamp) go to the end
-        // If neither was logged, maintain original order
-        if (timeA === 0 && timeB === 0) return 0;
-        if (timeA === 0) return -1; // A wasn't logged, move to top
-        if (timeB === 0) return 1;  // B wasn't logged, move to top
-        return timeA - timeB;       // Sort by time, oldest first
-    });
-};
-
 export const useHomeData = (): UseHomeDataResult => {
-    const [state, setState] = useState<HomeDataState>(() => {
-        // Initialize with saved data
-        const savedData = loadFromLocalStorage();
-        return {
-            ...getDefaultState(),
-            lastLoggedTimes: savedData.lastLoggedTimes
-        };
-    });
+    const [state, setState] = useState<MainState>(getDefaultMainState);
 
-    const updateState = useCallback((partialStateOrFunction: Partial<HomeDataState> | ((prev: HomeDataState) => HomeDataState)) => {
+    const updateState = useCallback((partialState: Partial<MainState>) => {
+        setState(prev => ({ ...prev, ...partialState }));
+    }, []);
+
+    const updateLoadingState = useCallback((key: keyof LoadingState, value: boolean) => {
         setState(prev => {
-            const newState = typeof partialStateOrFunction === 'function' 
-                ? partialStateOrFunction(prev)
-                : { ...prev, ...partialStateOrFunction };
+            const newLoadingState = { ...prev.loadingState, [key]: value };
             
             // Update global loading state based on individual loading states
-            if (newState.loadingState) {
-                const { activityTypes, activityPresets, wellnessMetrics, recentActivities } = newState.loadingState;
-                newState.isLoading = activityTypes || activityPresets || wellnessMetrics || recentActivities;
+            // Only show loading during initial load, not during refreshes
+            let newIsLoading = prev.isLoading;
+            if (!prev.hasInitiallyLoaded) {
+                const { activityTypes, activityPresets, wellnessMetrics, recentActivities } = newLoadingState;
+                newIsLoading = activityTypes || activityPresets || wellnessMetrics || recentActivities;
+            } else {
+                newIsLoading = false;
             }
             
-            return newState;
+            // Mark as initially loaded when all initial fetch operations are complete
+            let newHasInitiallyLoaded = prev.hasInitiallyLoaded;
+            if (!prev.hasInitiallyLoaded) {
+                const { activityTypes, activityPresets, wellnessMetrics, recentActivities } = newLoadingState;
+                if (!activityTypes && !activityPresets && !wellnessMetrics && !recentActivities) {
+                    newHasInitiallyLoaded = true;
+                    newIsLoading = false;
+                }
+            }
+            
+            return {
+                ...prev,
+                loadingState: newLoadingState,
+                isLoading: newIsLoading,
+                hasInitiallyLoaded: newHasInitiallyLoaded
+            };
         });
     }, []);
 
-    const fetchActivityTypes = useCallback(async () => {
-        updateState(prev => ({ 
-            ...prev,
-            error: null,
-            loadingState: { ...prev.loadingState, activityTypes: true }
-        }));
-        try {
-            const response = await getActivityTypes();
-            const enabledActivityTypes = response.data?.activityTypes.filter(at => at.enabled) || [];
-
-            // Sort activities with recently logged ones at the end
-            const sortedActivities = sortActivitiesByLastLogged(
-                enabledActivityTypes,
-                state.lastLoggedTimes
-            );
-
-            updateState(prev => ({ 
-                ...prev,
-                activityTypes: sortedActivities,
-                loadingState: { ...prev.loadingState, activityTypes: false }
-            }));
-        } catch (err: unknown) {
-            let message = 'An unknown error occurred.';
-            if (err instanceof Error) {
-                message = err.message;
-            }
-            updateState(prev => ({ 
-                ...prev,
-                error: message,
-                loadingState: { ...prev.loadingState, activityTypes: false }
-            }));
-            console.error("Failed to fetch activity types:", err);
-        }
-    }, [updateState, state.lastLoggedTimes]);
-
-    const fetchActivityPresets = useCallback(async () => {
-        updateState(prev => ({ 
-            ...prev,
-            loadingState: { ...prev.loadingState, activityPresets: true }
-        }));
-        try {
-            const response = await getActivityPresets();
-            updateState(prev => ({ 
-                ...prev,
-                activityPresets: response.data.activityPresets,
-                loadingState: { ...prev.loadingState, activityPresets: false }
-            }));
-        } catch (err: unknown) {
-            console.error("Failed to fetch activity presets:", err);
-            updateState(prev => ({ 
-                ...prev,
-                loadingState: { ...prev.loadingState, activityPresets: false }
-            }));
-        }
+    const setError = useCallback((error: string | null) => {
+        updateState({ error });
     }, [updateState]);
 
-    const fetchWellnessMetrics = useCallback(async () => {
-        updateState(prev => ({ 
-            ...prev,
-            loadingState: { ...prev.loadingState, wellnessMetrics: true }
-        }));
-        try {
-            const response = await getWellnessMetrics();
-            updateState(prev => ({ 
-                ...prev,
-                wellnessMetrics: response.data.wellnessMetrics,
-                loadingState: { ...prev.loadingState, wellnessMetrics: false }
-            }));
-        } catch (err: unknown) {
-            console.error("Failed to fetch wellness metrics:", err);
-            updateState(prev => ({ 
-                ...prev,
-                loadingState: { ...prev.loadingState, wellnessMetrics: false }
-            }));
-        }
+    const setIsSubmitting = useCallback((isSubmitting: boolean) => {
+        updateState({ isSubmitting });
     }, [updateState]);
 
-    const fetchRecentActivities = useCallback(async () => {
-        updateState(prev => ({ 
-            ...prev,
-            loadingState: { ...prev.loadingState, recentActivities: true }
-        }));
-        try {
-            const now = new Date();
-            const threeHoursAgo = new Date(now.getTime() - (3 * 60 * 60 * 1000)); // 3 hours ago
-
-            const response = await getTrackedActivities({
-                startDate: threeHoursAgo.toISOString(),
-                endDate: now.toISOString(),
-                limit: 10
-            });
-
-            updateState(prev => ({ 
-                ...prev,
-                recentlyLoggedActivities: response.data.trackedActivities,
-                loadingState: { ...prev.loadingState, recentActivities: false }
-            }));
-        } catch (err: unknown) {
-            console.error("Failed to fetch recent activities:", err);
-            updateState(prev => ({ 
-                ...prev,
-                loadingState: { ...prev.loadingState, recentActivities: false }
-            }));
-        }
+    const setSuccessMessage = useCallback((successMessage: string | null) => {
+        updateState({ successMessage });
     }, [updateState]);
 
-    useEffect(() => {
-        fetchActivityTypes();
-        fetchActivityPresets();
-        fetchWellnessMetrics();
-        fetchRecentActivities();
-    }, [fetchActivityTypes, fetchActivityPresets, fetchWellnessMetrics, fetchRecentActivities]);
-
-    const openTrackingDialog = useCallback((activityType: ActivityTypeClient) => {
-        updateState({ trackingDialog: { open: true, activityType, presetValues: undefined } });
-    }, [updateState]);
-
-    const openTrackingDialogWithPreset = useCallback((preset: ActivityPresetClient, activityType: ActivityTypeClient) => {
-        updateState({
-            trackingDialog: {
-                open: true,
-                activityType: activityType,
-                presetValues: preset.presetFields
-            }
-        });
-    }, [updateState]);
-
-    const closeTrackingDialog = useCallback(() => {
-        updateState({ trackingDialog: { open: false, activityType: null, presetValues: undefined } });
-    }, [updateState]);
-
-    const openMetricDialog = useCallback((metric: WellnessMetricClient) => {
-        updateState({ metricDialog: { open: true, metric } });
-    }, [updateState]);
-
-    const closeMetricDialog = useCallback(() => {
-        updateState({ metricDialog: { open: false, metric: null } });
+    const setIsRefreshing = useCallback((isRefreshing: boolean) => {
+        updateState({ isRefreshing });
     }, [updateState]);
 
     const clearSuccessMessage = useCallback(() => {
         updateState({ successMessage: null });
     }, [updateState]);
 
-    // Save lastLoggedTimes to localStorage whenever it changes
+    // Initialize dialog hooks
+    const dialogHooks = useDialogHooks();
+
+    // Initialize recent activities hooks
+    const recentActivitiesHooks = useRecentActivitiesHooks({
+        updateLoadingState
+    });
+
+    // Initialize metrics hooks
+    const metricsHooks = useMetricsHooks({
+        updateLoadingState,
+        setError,
+        setIsSubmitting,
+        setSuccessMessage,
+        clearSuccessMessage
+    });
+
+    // Initialize activity hooks
+    const activityHooks = useActivityHooks({
+        updateLoadingState,
+        setError,
+        setIsSubmitting,
+        setSuccessMessage,
+        setIsRefreshing,
+        closeTrackingDialog: dialogHooks.closeTrackingDialog,
+        clearSuccessMessage,
+        refreshRecentActivities: recentActivitiesHooks.refreshRecentActivities
+    });
+
+    // Initialize data on mount
     useEffect(() => {
-        try {
-            localStorage.setItem('lastLoggedTimes', JSON.stringify(state.lastLoggedTimes));
-        } catch (e) {
-            console.error('Error saving to localStorage:', e);
-        }
-    }, [state.lastLoggedTimes]);
+        activityHooks.fetchActivityTypes();
+        activityHooks.fetchActivityPresets();
+        metricsHooks.fetchWellnessMetrics();
+        recentActivitiesHooks.fetchRecentActivities();
+    }, [activityHooks.fetchActivityTypes, activityHooks.fetchActivityPresets, metricsHooks.fetchWellnessMetrics, recentActivitiesHooks.fetchRecentActivities]);
 
-    const handleTrackActivity = useCallback(async (
-        activityType: ActivityTypeClient,
-        values: TrackedActivityValue[],
-        notes?: string,
-        timestamp?: Date
-    ) => {
-        updateState({ isSubmitting: true, error: null });
-        try {
-            const activityTimestamp = timestamp || new Date();
-            const payload: CreateTrackedActivityPayload = {
-                activityTypeId: activityType._id,
-                activityName: activityType.name,
-                timestamp: activityTimestamp,
-                values,
-                notes,
-            };
-            await createTrackedActivity(payload);
-
-            // Update the last logged time for this activity
-            const updatedLastLoggedTimes = {
-                ...state.lastLoggedTimes,
-                [activityType._id]: activityTimestamp
-            };
-
-            // Filter out the tracked activity from the list
-            const updatedActivityTypes = state.activityTypes.filter(
-                activity => activity._id !== activityType._id
-            );
-
-            updateState({
-                isSubmitting: false,
-                successMessage: `${activityType.name} logged successfully!`,
-                lastLoggedTimes: updatedLastLoggedTimes,
-                activityTypes: updatedActivityTypes
-            });
-
-            closeTrackingDialog();
-
-            // Refresh recent activities to include the new one
-            fetchRecentActivities();
-
-            // Auto-clear success message after 5 seconds
-            setTimeout(() => {
-                clearSuccessMessage();
-            }, 5000);
-
-        } catch (err: unknown) {
-            let message = 'An unknown error occurred while tracking activity.';
-            if (err instanceof Error) {
-                message = err.message;
-            }
-            updateState({ error: message, isSubmitting: false });
-            console.error("Failed to track activity:", err);
-        }
-    }, [state.activityTypes, state.lastLoggedTimes, updateState, closeTrackingDialog, clearSuccessMessage, fetchRecentActivities]);
-
+    // Override handleTrackPreset to use dialog functions
     const handleTrackPreset = useCallback(async (preset: ActivityPresetClient) => {
         // Find the corresponding activity type
         const allActivityTypes = await getActivityTypes();
         const activityType = allActivityTypes.data?.activityTypes.find(at => at._id === preset.activityTypeId);
 
         if (!activityType) {
-            updateState({ error: 'Activity type not found for this preset' });
+            setError('Activity type not found for this preset');
             return;
         }
 
         // Open the tracking dialog with preset values pre-filled
-        openTrackingDialogWithPreset(preset, activityType);
-    }, [openTrackingDialogWithPreset, updateState]);
-
-    const handleTrackMetric = useCallback(async (metric: WellnessMetricClient, value: number | string, notes?: string) => {
-        try {
-            const payload: TrackWellnessMetricPayload = {
-                metricId: metric._id,
-                value,
-                notes,
-            };
-            await trackWellnessMetric(payload);
-
-            updateState({ successMessage: `${metric.name} tracked successfully!` });
-
-            // Auto-clear success message after 5 seconds
-            setTimeout(() => {
-                clearSuccessMessage();
-            }, 5000);
-
-        } catch (err: unknown) {
-            let message = 'An unknown error occurred while tracking metric.';
-            if (err instanceof Error) {
-                message = err.message;
-            }
-            updateState({ error: message, isSubmitting: false });
-            console.error("Failed to track metric:", err);
-        }
-    }, [updateState, clearSuccessMessage]);
+        dialogHooks.openTrackingDialogWithPreset(preset, activityType);
+    }, [dialogHooks.openTrackingDialogWithPreset, setError]);
 
     return {
-        ...state,
-        fetchActivityTypes,
-        fetchActivityPresets,
-        fetchWellnessMetrics,
-        fetchRecentActivities,
-        openTrackingDialog,
-        openTrackingDialogWithPreset,
-        closeTrackingDialog,
-        openMetricDialog,
-        closeMetricDialog,
-        handleTrackActivity,
+        // Activity data
+        activityTypes: activityHooks.activityTypes,
+        activityPresets: activityHooks.activityPresets,
+        lastLoggedTimes: activityHooks.lastLoggedTimes,
+        
+        // Metrics data
+        wellnessMetrics: metricsHooks.wellnessMetrics,
+        
+        // Recent activities data
+        recentlyLoggedActivities: recentActivitiesHooks.recentlyLoggedActivities,
+        
+        // Main state
+        isLoading: state.isLoading,
+        error: state.error,
+        isSubmitting: state.isSubmitting,
+        successMessage: state.successMessage,
+        isRefreshing: state.isRefreshing,
+        hasInitiallyLoaded: state.hasInitiallyLoaded,
+        loadingState: state.loadingState,
+        
+        // Dialog state
+        trackingDialog: dialogHooks.trackingDialog,
+        metricDialog: dialogHooks.metricDialog,
+        
+        // Fetch functions
+        fetchActivityTypes: activityHooks.fetchActivityTypes,
+        fetchActivityPresets: activityHooks.fetchActivityPresets,
+        fetchWellnessMetrics: metricsHooks.fetchWellnessMetrics,
+        fetchRecentActivities: recentActivitiesHooks.fetchRecentActivities,
+        
+        // Dialog functions
+        openTrackingDialog: dialogHooks.openTrackingDialog,
+        openTrackingDialogWithPreset: dialogHooks.openTrackingDialogWithPreset,
+        closeTrackingDialog: dialogHooks.closeTrackingDialog,
+        openMetricDialog: dialogHooks.openMetricDialog,
+        closeMetricDialog: dialogHooks.closeMetricDialog,
+        
+        // Action functions
+        handleTrackActivity: activityHooks.handleTrackActivity,
         handleTrackPreset,
-        handleTrackMetric,
-        clearSuccessMessage,
+        handleTrackMetric: metricsHooks.handleTrackMetric,
+        clearSuccessMessage
     };
 }; 
