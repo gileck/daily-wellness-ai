@@ -26,7 +26,7 @@ const nextConfig: NextConfig = withPWA({
   async rewrites() {
     return [
       {
-        source: '/:path*',
+        source: '/((?!api|_next|static|favicon.ico).*)',
         destination: '/',
       },
     ];

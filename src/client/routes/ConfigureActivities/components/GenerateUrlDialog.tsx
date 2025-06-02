@@ -5,10 +5,6 @@ import {
     DialogContent,
     DialogActions,
     Button,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
     Typography,
     Box,
     Alert,
@@ -24,36 +20,30 @@ import { useAuth } from '@/client/context/AuthContext';
 interface GenerateUrlDialogProps {
     open: boolean;
     onClose: () => void;
-    activityTypes: ActivityTypeClient[];
+    activityType: ActivityTypeClient | null;
 }
 
 export const GenerateUrlDialog: React.FC<GenerateUrlDialogProps> = ({
     open,
     onClose,
-    activityTypes
+    activityType
 }) => {
     const { user } = useAuth();
-    const [selectedActivityType, setSelectedActivityType] = useState<ActivityTypeClient | null>(null);
     const [copiedUrl, setCopiedUrl] = useState(false);
 
-    const handleActivityTypeChange = (activityTypeId: string) => {
-        const activityType = activityTypes.find(at => at._id === activityTypeId);
-        setSelectedActivityType(activityType || null);
-    };
-
     const generateUrl = () => {
-        if (!user || !selectedActivityType) return '';
+        if (!user || !activityType) return '';
 
         const baseUrl = 'https://daily-wellness-ai.vercel.app';
-        return `${baseUrl}/api/external/${user.id}/${selectedActivityType._id}`;
+        return `${baseUrl}/api/external/${user.id}/${activityType._id}`;
     };
 
     const generateExampleJson = () => {
-        if (!selectedActivityType) return '';
+        if (!activityType) return '';
 
         const exampleFields: Record<string, unknown> = {};
 
-        selectedActivityType.fields.forEach(field => {
+        activityType.fields.forEach(field => {
             if (field.fieldType === 'Number') {
                 exampleFields[field.name] = 100;
             } else if (field.fieldType === 'Boolean') {
@@ -84,7 +74,6 @@ export const GenerateUrlDialog: React.FC<GenerateUrlDialogProps> = ({
     };
 
     const handleClose = () => {
-        setSelectedActivityType(null);
         setCopiedUrl(false);
         onClose();
     };
@@ -98,35 +87,18 @@ export const GenerateUrlDialog: React.FC<GenerateUrlDialogProps> = ({
         >
             <DialogTitle>
                 Generate External Tracking URL
+                {activityType && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        For activity: <strong>{activityType.name}</strong>
+                    </Typography>
+                )}
             </DialogTitle>
             <DialogContent>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                    Generate a URL that can be used by external applications (like iOS Shortcuts) to track activities automatically.
+                    Generate a URL that can be used by external applications (like iOS Shortcuts) to track this activity automatically.
                 </Typography>
 
-                <FormControl fullWidth sx={{ mb: 3 }}>
-                    <InputLabel>Select Activity Type</InputLabel>
-                    <Select
-                        value={selectedActivityType?._id || ''}
-                        onChange={(e) => handleActivityTypeChange(e.target.value)}
-                        label="Select Activity Type"
-                    >
-                        {activityTypes.map((activityType) => (
-                            <MenuItem key={activityType._id} value={activityType._id}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    {activityType.name}
-                                    <Chip
-                                        label={activityType.type}
-                                        size="small"
-                                        variant="outlined"
-                                    />
-                                </Box>
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </FormControl>
-
-                {selectedActivityType && (
+                {activityType && (
                     <Box>
                         <Typography variant="h6" sx={{ mb: 2 }}>
                             Generated URL
@@ -177,7 +149,7 @@ export const GenerateUrlDialog: React.FC<GenerateUrlDialogProps> = ({
                             Activity Fields:
                         </Typography>
                         <Box sx={{ mb: 2 }}>
-                            {selectedActivityType.fields.map((field) => (
+                            {activityType.fields.map((field) => (
                                 <Chip
                                     key={field.name}
                                     label={`${field.name} (${field.fieldType})`}

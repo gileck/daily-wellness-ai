@@ -69,6 +69,12 @@ export const ActivityConfigurationDashboard: React.FC = () => {
         }
     };
 
+    // Dummy handler for URL generation (not implemented in this component)
+    const handleGenerateUrl = () => {
+        // This feature is not available in this component
+        console.log('URL generation not available in this component');
+    };
+
     if (isLoading && !userActivityTypes.length && !predefinedData && !userWellnessMetrics.length) {
         return (
             <Container maxWidth="md" sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
@@ -149,6 +155,7 @@ export const ActivityConfigurationDashboard: React.FC = () => {
                                         activityType={activityType}
                                         onEditClick={handleOpenAddActivityDialog}
                                         onDeleteClick={handleDeleteActivityType}
+                                        onGenerateUrl={handleGenerateUrl}
                                     />
                                 </Box>
                             ))

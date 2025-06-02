@@ -11,6 +11,7 @@ import { GenerateUrlDialog } from './GenerateUrlDialog';
 import { useActivityConfigurationDashboard } from '../hooks/useActivityConfigurationDashboard';
 import { useActivityPresets } from '../hooks/useActivityPresets';
 import { ActivityPresetClient, CreateActivityPresetPayload } from '@/apis/activityPresets/types';
+import { ActivityTypeClient } from '@/apis/activity/types';
 
 export const ActivitiesTab: React.FC = () => {
     const {
@@ -42,6 +43,7 @@ export const ActivitiesTab: React.FC = () => {
     const [openAddPresetDialog, setOpenAddPresetDialog] = React.useState(false);
     const [editingPreset, setEditingPreset] = React.useState<ActivityPresetClient | null>(null);
     const [openGenerateUrlDialog, setOpenGenerateUrlDialog] = React.useState(false);
+    const [selectedActivityForUrl, setSelectedActivityForUrl] = React.useState<ActivityTypeClient | null>(null);
 
     const handleOpenAddPresetDialog = (presetToEdit?: ActivityPresetClient) => {
         setEditingPreset(presetToEdit || null);
@@ -61,12 +63,14 @@ export const ActivitiesTab: React.FC = () => {
         }
     };
 
-    const handleOpenGenerateUrlDialog = () => {
+    const handleOpenGenerateUrlDialog = (activityType: ActivityTypeClient) => {
+        setSelectedActivityForUrl(activityType);
         setOpenGenerateUrlDialog(true);
     };
 
     const handleCloseGenerateUrlDialog = () => {
         setOpenGenerateUrlDialog(false);
+        setSelectedActivityForUrl(null);
     };
 
     if (isLoading && !userActivityTypes.length && !predefinedData) {
@@ -101,18 +105,6 @@ export const ActivitiesTab: React.FC = () => {
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, flexDirection: { xs: 'column', sm: 'row' }, width: { xs: '100%', sm: 'auto' } }}>
                         <Button
-                            variant="outlined"
-                            onClick={handleOpenGenerateUrlDialog}
-                            disabled={userActivityTypes.filter(at => at.enabled).length === 0}
-                            sx={{
-                                px: 2.5, py: 1.25,
-                                borderRadius: 2,
-                                textTransform: 'none'
-                            }}
-                        >
-                            Generate URL
-                        </Button>
-                        <Button
                             variant="contained"
                             startIcon={<AddIcon />}
                             onClick={() => handleOpenAddActivityDialog()}
@@ -145,6 +137,7 @@ export const ActivitiesTab: React.FC = () => {
                                         activityType={activityType}
                                         onEditClick={handleOpenAddActivityDialog}
                                         onDeleteClick={handleDeleteActivityType}
+                                        onGenerateUrl={handleOpenGenerateUrlDialog}
                                     />
                                 </Box>
                             ))
@@ -275,7 +268,7 @@ export const ActivitiesTab: React.FC = () => {
             <GenerateUrlDialog
                 open={openGenerateUrlDialog}
                 onClose={handleCloseGenerateUrlDialog}
-                activityTypes={userActivityTypes.filter(at => at.enabled)}
+                activityType={selectedActivityForUrl}
             />
             <AddActivityTypeDialog
                 open={openAddActivityDialog}

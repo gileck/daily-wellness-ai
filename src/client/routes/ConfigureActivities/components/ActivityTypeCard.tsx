@@ -5,6 +5,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import LinkIcon from '@mui/icons-material/Link';
 import { getActivityIconWithProps } from '@/client/utils/activityIcons';
 
 // Component to render activity icon in the avatar
@@ -28,9 +29,10 @@ interface ActivityTypeCardProps {
     activityType: ActivityTypeClient;
     onEditClick: (activityType: ActivityTypeClient) => void;
     onDeleteClick: (activityTypeId: string) => void;
+    onGenerateUrl: (activityType: ActivityTypeClient) => void;
 }
 
-export const ActivityTypeCard: React.FC<ActivityTypeCardProps> = ({ activityType, onEditClick, onDeleteClick }) => {
+export const ActivityTypeCard: React.FC<ActivityTypeCardProps> = ({ activityType, onEditClick, onDeleteClick, onGenerateUrl }) => {
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const open = Boolean(anchorEl);
@@ -150,6 +152,9 @@ export const ActivityTypeCard: React.FC<ActivityTypeCardProps> = ({ activityType
                             </MenuItem>
                             <MenuItem onClick={(e) => { e.stopPropagation(); handleDelete(); }} sx={{ gap: 1, color: 'error.main' }}>
                                 <DeleteIcon fontSize="small" /> Delete
+                            </MenuItem>
+                            <MenuItem onClick={(e) => { e.stopPropagation(); onGenerateUrl(activityType); }} sx={{ gap: 1 }}>
+                                <LinkIcon fontSize="small" /> Generate URL
                             </MenuItem>
                         </Menu>
                     </Box>
