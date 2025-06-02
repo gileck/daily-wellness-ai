@@ -69,4 +69,18 @@ export interface DuplicateTrackedActivityPayload {
 
 export interface DuplicateTrackedActivityResponse {
     trackedActivity: TrackedActivity;
-} 
+}
+
+// External tracking endpoint payload
+export interface ExternalTrackActivityPayload {
+    timestamp?: Date;
+    values: TrackedActivityValue[];
+    notes?: string;
+}
+
+export interface ExternalTrackActivityResponse {
+    success: boolean;
+    trackedActivity?: TrackedActivity;
+}
+
+export const API_EXTERNAL_TRACK_ACTIVITY = 'trackedActivities/external'; 

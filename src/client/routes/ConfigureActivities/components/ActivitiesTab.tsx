@@ -7,6 +7,7 @@ import { AddActivityTypeDialog } from './AddActivityTypeDialog';
 import { ActivityTypeCard } from './ActivityTypeCard';
 import { ActivityPresetCard } from './ActivityPresetCard';
 import { AddActivityPresetDialog } from './AddActivityPresetDialog';
+import { GenerateUrlDialog } from './GenerateUrlDialog';
 import { useActivityConfigurationDashboard } from '../hooks/useActivityConfigurationDashboard';
 import { useActivityPresets } from '../hooks/useActivityPresets';
 import { ActivityPresetClient, CreateActivityPresetPayload } from '@/apis/activityPresets/types';
@@ -40,6 +41,7 @@ export const ActivitiesTab: React.FC = () => {
 
     const [openAddPresetDialog, setOpenAddPresetDialog] = React.useState(false);
     const [editingPreset, setEditingPreset] = React.useState<ActivityPresetClient | null>(null);
+    const [openGenerateUrlDialog, setOpenGenerateUrlDialog] = React.useState(false);
 
     const handleOpenAddPresetDialog = (presetToEdit?: ActivityPresetClient) => {
         setEditingPreset(presetToEdit || null);
@@ -57,6 +59,14 @@ export const ActivitiesTab: React.FC = () => {
         } else {
             await handleCreatePreset(payload);
         }
+    };
+
+    const handleOpenGenerateUrlDialog = () => {
+        setOpenGenerateUrlDialog(true);
+    };
+
+    const handleCloseGenerateUrlDialog = () => {
+        setOpenGenerateUrlDialog(false);
     };
 
     if (isLoading && !userActivityTypes.length && !predefinedData) {
@@ -89,23 +99,36 @@ export const ActivitiesTab: React.FC = () => {
                             Customize what activities you can track and what fields they include.
                         </Typography>
                     </Box>
-                    <Button
-                        variant="contained"
-                        startIcon={<AddIcon />}
-                        onClick={() => handleOpenAddActivityDialog()}
-                        disabled={Object.values(isSubmitting).some(s => s)}
-                        sx={{
-                            backgroundColor: '#1A2027',
-                            color: 'white',
-                            '&:hover': { backgroundColor: '#343A40' },
-                            alignSelf: { xs: 'flex-start', sm: 'auto' },
-                            px: 2.5, py: 1.25,
-                            borderRadius: 2,
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                        }}
-                    >
-                        New Type
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 1, flexDirection: { xs: 'column', sm: 'row' }, width: { xs: '100%', sm: 'auto' } }}>
+                        <Button
+                            variant="outlined"
+                            onClick={handleOpenGenerateUrlDialog}
+                            disabled={userActivityTypes.filter(at => at.enabled).length === 0}
+                            sx={{
+                                px: 2.5, py: 1.25,
+                                borderRadius: 2,
+                                textTransform: 'none'
+                            }}
+                        >
+                            Generate URL
+                        </Button>
+                        <Button
+                            variant="contained"
+                            startIcon={<AddIcon />}
+                            onClick={() => handleOpenAddActivityDialog()}
+                            disabled={Object.values(isSubmitting).some(s => s)}
+                            sx={{
+                                backgroundColor: '#1A2027',
+                                color: 'white',
+                                '&:hover': { backgroundColor: '#343A40' },
+                                px: 2.5, py: 1.25,
+                                borderRadius: 2,
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                            }}
+                        >
+                            New Type
+                        </Button>
+                    </Box>
                 </Box>
 
                 {error && Object.values(isSubmitting).some(s => s) && <Alert severity="error" sx={{ mb: 2.5 }}>{error}</Alert>}
@@ -249,6 +272,11 @@ export const ActivitiesTab: React.FC = () => {
                 ) : !isLoading && <Typography sx={{ fontStyle: 'italic', color: 'text.secondary', textAlign: 'center', py: 2 }}>No predefined activity types available.</Typography>}
             </Paper>
 
+            <GenerateUrlDialog
+                open={openGenerateUrlDialog}
+                onClose={handleCloseGenerateUrlDialog}
+                activityTypes={userActivityTypes.filter(at => at.enabled)}
+            />
             <AddActivityTypeDialog
                 open={openAddActivityDialog}
                 onClose={handleCloseAddActivityDialog}

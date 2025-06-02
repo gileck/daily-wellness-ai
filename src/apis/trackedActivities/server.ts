@@ -256,5 +256,5 @@ export const trackedActivitiesApiHandlers = {
     [API_GET_TRACKED_ACTIVITIES]: { process: getTrackedActivitiesProcess },
     [API_UPDATE_TRACKED_ACTIVITY]: { process: updateTrackedActivityProcess },
     [API_DELETE_TRACKED_ACTIVITY]: { process: deleteTrackedActivityProcess },
-    [API_DUPLICATE_TRACKED_ACTIVITY]: { process: duplicateTrackedActivityProcess },
+    [API_DUPLICATE_TRACKED_ACTIVITY]: { process: duplicateTrackedActivityProcess }
 }; 

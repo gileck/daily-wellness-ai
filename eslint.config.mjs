@@ -10,19 +10,21 @@ const compat = new FlatCompat({
   baseDirectory: __dirname,
 });
 
-// Custom rule to prevent adding new files under /src/pages/api/ except for process.ts
+// Custom rule to prevent adding new files under /src/pages/api/ except for process.ts and external routes
 const restrictApiRoutesRule = {
   create(context) {
     // Get the filename of the current file being linted
     const filename = context.getFilename();
 
-    // Check if the file is under /src/pages/api/ but not process.ts
+    // Check if the file is under /src/pages/api/ but not process.ts or external routes
     if (
       filename.includes('/src/pages/api/') &&
       !filename.endsWith('/src/pages/api/process.ts') &&
-      !filename.endsWith('\\src\\pages\\api\\process.ts') // For Windows paths
+      !filename.endsWith('\\src\\pages\\api\\process.ts') && // For Windows paths
+      !filename.includes('/src/pages/api/external/') &&
+      !filename.includes('\\src\\pages\\api\\external\\') // For Windows paths
     ) {
-      // Report an error for any file that's not process.ts in the /src/pages/api/ directory
+      // Report an error for any file that's not process.ts or external route in the /src/pages/api/ directory
       context.report({
         loc: { line: 1, column: 0 },
         message: 'API routes should not be added directly under /src/pages/api/. Use the centralized API architecture pattern instead.',
