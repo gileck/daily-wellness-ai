@@ -28,11 +28,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             notes
         });
 
-        return res.status(200).json(result);
+        const success = result.success;
+        const error = result.error;
+
+        return res.status(200).json({
+            success,
+            ...(error && { error }),
+        });
 
     } catch (error) {
         console.error('Error in external track activity:', error);
-        return res.status(500).json({
+        return res.status(200).json({
+            success: false,
             error: error instanceof Error ? error.message : 'Internal server error while tracking activity.'
         });
     }

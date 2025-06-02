@@ -50,17 +50,26 @@ export const process = async (
         const { userId, activityTypeId, timestamp, values, notes } = payload;
 
         if (!userId || !activityTypeId || !values) {
-            throw new ServerError(400, 'Missing required fields: userId, activityTypeId, and values are required.');
+            return {
+                success: false,
+                error: 'Missing required fields: userId, activityTypeId, and values are required.'
+            }
         }
 
         // Validate that the activity type exists and belongs to the user
         const activityType = await getActivityTypeById(new ObjectId(activityTypeId));
         if (!activityType) {
-            throw new ServerError(404, 'Activity type not found.');
+            return {
+                success: false,
+                error: 'Activity type not found.'
+            }
         }
 
         if (activityType.userId.toString() !== userId && !activityType.isPredefined) {
-            throw new ServerError(403, 'Activity type not accessible by this user.');
+            return {
+                success: false,
+                error: 'Activity type not accessible by this user.'
+            }
         }
 
         // Create the tracked activity
@@ -76,7 +85,10 @@ export const process = async (
         // Get the created activity with populated ActivityType data
         const result = await getTrackedActivityWithTypeById(activityId, new ObjectId(userId));
         if (!result) {
-            throw new ServerError(500, 'Failed to retrieve created activity with type information.');
+            return {
+                success: false,
+                error: 'Failed to retrieve created activity with type information.'
+            }
         }
 
         return {
@@ -86,8 +98,14 @@ export const process = async (
     } catch (error) {
         console.error('Error in external track activity process:', error);
         if (error instanceof ServerError) {
-            throw error;
+            return {
+                success: false,
+                error: error.message
+            }
         }
-        throw new ServerError(500, `Failed to track activity: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return {
+            success: false,
+            error: `Failed to track activity: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }
     }
 }; 

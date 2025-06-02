@@ -81,6 +81,7 @@ export interface ExternalTrackActivityPayload {
 export interface ExternalTrackActivityResponse {
     success: boolean;
     trackedActivity?: TrackedActivity;
+    error?: string;
 }
 
 export const API_EXTERNAL_TRACK_ACTIVITY = 'trackedActivities/external'; 
